@@ -1,0 +1,63 @@
+# Every call type seen in a collected log, one per line, as printed. `collect` reports any other.
+# Seeded from the 11 logs uploaded 2026-07-29 to 2026-10-01.
+911 HANGUP / MISDIAL
+911 UNKNOWN
+ABANDONED MV
+ACCIDENT HIT & RUN
+ALARM, COMMERCIAL
+ALARM, RESIDENTIAL
+ALARM, SCHOOL
+Animal Complaint
+ASSAULT
+ASSIST CITIZEN
+ASSIST OTHER AGENCY
+AUTO THEFT
+BURGLARY (B & E) PAST
+CARBON MONOXIDE ALARM
+COMPLAINT
+Directed Patrol
+DISABLED MV
+DISTURBANCE
+Electrical Problem
+fight in progress
+FOUND/LOST PROPERTY
+HARASSMENT
+Harassment Order Violation
+Harassment Prevention Order
+JUVENILE ISSUE
+LARCENY /FORGERY/ FRAUD
+LOCK OUT
+Make Notification
+MEDICAL - OVERDOSE
+MEDICAL EMERGENCY
+MISSING PERSON
+MOTOR VEHICLE ACCIDENT
+MOTOR VEHICLE STOP
+Motor Vehicle Tow
+MVA - Not Investigated
+NEEDLES-found/disposed
+Noise Ordinance Violation
+Odor of Gas Inside a Structure
+Odor of Gas Outside Structure
+Parking Complaint
+Police Information
+Prisoner Transport
+Restraining Order Violation
+ROBBERY
+Serve Harassment Prev. Order
+SERVE RESTRAINING ORDER
+SERVE SUMMONS
+SERVE WARRANT
+SOLICITING
+SUDDEN DEATH
+SUSPICIOUS ACTIVITY
+Suspicious MV
+THREATS
+TRAFFIC
+Trash Dumping
+Trespassing
+UNWANTED GUEST
+VANDALISM
+Water Problem
+Well Being Check
+Wire Down

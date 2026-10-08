@@ -1,0 +1,16 @@
+{
+  "about": "AC1 golden entries for the Sep 21-27, 2026 log (media 442445): the 10 call numbers random.Random(20260921) samples from the log's sorted call numbers. Built by hand from `pdftotext -layout` output, not from this package's parser. Pages are 1-based PDF pages. Hand-checked against the PDF by: (pending, Ken Hoffmann)",
+  "seed": 20260921,
+  "entries": [
+    {"call_number": "26-11171", "page": 5, "date": "2026-09-22", "time": "1801", "call_type": "MOTOR VEHICLE STOP", "result": "Unit Clear", "location_prefix": "Location/Address", "location_raw": "WEST EMERSON ST"},
+    {"call_number": "26-11103", "page": 1, "date": "2026-09-21", "time": "0857", "call_type": "MEDICAL EMERGENCY", "result": "Transported to Hospital", "location_prefix": null, "location_raw": null},
+    {"call_number": "26-11158", "page": 4, "date": "2026-09-22", "time": "1212", "call_type": "MOTOR VEHICLE STOP", "result": "Verbal Warning", "location_prefix": "Location/Address", "location_raw": "[MEL 13727] LINCOLN SCHOOL - 80 WEST WYOMING AVE"},
+    {"call_number": "26-11114", "page": 2, "date": "2026-09-21", "time": "1317", "call_type": "Directed Patrol", "result": "Unit Clear", "location_prefix": "Location/Address", "location_raw": "108 LINCOLN ST @ 155 PORTER ST"},
+    {"call_number": "26-11105", "page": 1, "date": "2026-09-21", "time": "0922", "call_type": "MOTOR VEHICLE STOP", "result": "Verbal Warning", "location_prefix": "Location/Address", "location_raw": "580 LYNN FELLS PKWY @ 52 BATCHELDER ST"},
+    {"call_number": "26-11367", "page": 15, "date": "2026-09-27", "time": "1730", "call_type": "MOTOR VEHICLE ACCIDENT", "result": "* Report taken", "location_prefix": "Location/Address", "location_raw": "[MEL 2108] GARDEN REMEDIES - 732 NEWBURYPORT TPKE"},
+    {"call_number": "26-11148", "page": 4, "date": "2026-09-22", "time": "0637", "call_type": "Directed Patrol", "result": "Unit Clear", "location_prefix": "Location/Address", "location_raw": "185 LEBANON ST @ 15 NAPLES RD"},
+    {"call_number": "26-11231", "page": 9, "date": "2026-09-24", "time": "0928", "call_type": "MOTOR VEHICLE ACCIDENT", "result": "Unit Clear", "location_prefix": "Vicinity of", "location_raw": "47 MALVERN ST"},
+    {"call_number": "26-11213", "page": 8, "date": "2026-09-23", "time": "2015", "call_type": "COMPLAINT", "result": "Unit Clear", "location_prefix": "Location/Address", "location_raw": "100 GREEN ST"},
+    {"call_number": "26-11370", "page": 15, "date": "2026-09-27", "time": "2023", "call_type": "911 HANGUP / MISDIAL", "result": "Unit Clear", "location_prefix": "Location/Address", "location_raw": "[MEL 290] KIM RESIDENCE - 124 BOARDMAN AVE"}
+  ]
+}

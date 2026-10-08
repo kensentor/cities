@@ -1,0 +1,39 @@
+{
+  "reference_version": "2026-10-08",
+  "fetched_at": "2026-10-08T02:03:59+00:00",
+  "layers": [
+    {
+      "name": "address_points",
+      "url": "https://arcgisserver.digital.mass.gov/arcgisserver/rest/services/AGOL/MassGIS_Master_Address_Points/FeatureServer/0",
+      "where": "GEOGRAPHIC_TOWN='MELROSE'",
+      "out_fields": [
+        "MASTER_ADDRESS_ID",
+        "FULL_NUMBER_STANDARDIZED",
+        "STREET_NAME"
+      ],
+      "feature_count": 14216
+    },
+    {
+      "name": "roads",
+      "url": "https://services1.arcgis.com/hGdibHYSPO59RG1h/ArcGIS/rest/services/MassDOTRoads_gdb/FeatureServer/0",
+      "where": "MGIS_TOWN='MELROSE'",
+      "out_fields": [
+        "RD_SEG_ID",
+        "STREET_NAME",
+        "AADT"
+      ],
+      "feature_count": 1102
+    },
+    {
+      "name": "wards",
+      "url": "https://services1.arcgis.com/hGdibHYSPO59RG1h/ArcGIS/rest/services/Wards_Precincts_gdb/FeatureServer/0",
+      "where": "TOWN='MELROSE'",
+      "out_fields": [
+        "WP_NAME",
+        "WARD",
+        "PRECINCT"
+      ],
+      "feature_count": 14
+    }
+  ]
+}

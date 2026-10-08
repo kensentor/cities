@@ -1,0 +1,79 @@
+[project]
+name = "cities"
+version = "0.1.0"
+description = "Collect and map published police dispatch logs, one namespace per city"
+requires-python = ">=3.14"
+dependencies = [
+    "httpx>=0.28.1",
+    "pdfplumber>=0.11.10",
+]
+
+[project.scripts]
+cities = "cities.cli:main"
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.15",
+    "pyright>=1.1.414",
+    "pytest>=9.1.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests/melrose"]
+addopts = ["--import-mode=importlib"]
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["tests/melrose"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
+# `standard`, never `basic`: only `standard` reports an implementer whose signature drifted from
+# its port (reportIncompatibleMethodOverride).
+typeCheckingMode = "standard"
+
+# Import contracts for the Melrose hexagon (hexagonal-python skill §6). After any change here,
+# plant one violation per contract and confirm exactly that contract reports BROKEN.
+# Separators inside a layer: `a | b` = independent; `a : b` = each may import the other.
+[tool.importlinter]
+root_package = "cities"
+# Required before any contract may name a third-party or standard-library module.
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Melrose hexagon layering"
+type = "layers"
+# Read top to bottom: a layer may import the ones below it, never above. `domain` sits below
+# `ports` because port signatures are written in its types; `core` sits above `ports` because it
+# implements the inbound ones and calls the outbound ones. Only `composition` reads `settings`.
+# `exhaustive` fails any new module that lands in no layer.
+containers = ["cities.melrose"]
+layers = ["handler", "composition", "settings", "adapters : stubs", "core", "ports", "domain"]
+exhaustive = true
+
+[[tool.importlinter.contracts]]
+name = "Inside the core: independent use cases over loading over the rules"
+type = "layers"
+# The three use cases never import one another; what they share lives in `loading` and `rules`.
+containers = ["cities.melrose.core"]
+layers = ["collect | rebuild | reference", "loading", "rules"]
+exhaustive = true
+
+[[tool.importlinter.contracts]]
+name = "The inner layers import no PDF, HTTP, database or logging library"
+type = "forbidden"
+# The counting, versioning and privacy rules must hold whatever the source, store or output is.
+# Spell each name exactly: a name that never appears in the import graph keeps this green forever.
+source_modules = ["cities.melrose.domain", "cities.melrose.ports", "cities.melrose.core"]
+forbidden_modules = ["httpx", "pdfplumber", "pdfminer", "sqlite3", "logging"]
+
+[[tool.importlinter.contracts]]
+name = "Inbound and outbound adapters are independent"
+type = "independence"
+# The core is the only thing between what drives the application and what it drives.
+modules = ["cities.melrose.adapters.inbound", "cities.melrose.adapters.outbound"]
