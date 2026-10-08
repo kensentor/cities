@@ -1,0 +1,69 @@
+---
+config:
+  layout: elk
+  elk:
+    nodePlacementStrategy: NETWORK_SIMPLEX
+  themeCSS: ".nodeLabel p { text-align: left; } .nodeLabel p strong:first-child { display: block; text-align: center; } .nodeLabel p strong:first-child + br { display: none; }"
+---
+%% Melrose traffic stops map: data flow (physical DFD, detail altitude).
+%% Built at: shell, no code yet (design-stage diagram) · rendered and validated.
+%% VERIFIED BY EXPERIMENT 2026-10-03: the WP media API listing (parent=160), PDF text extraction,
+%%   the MassGIS address-point and precinct layers, the MassDOT roads layer (see technical.md, Experiments).
+%% NOT VERIFIED: everything inside the cities CLI and the page is proposed design, not built code.
+%% GROUNDING: process and store names are the ones technical.md proposes; no code exists to cite.
+%% Companion: technical.md (Architecture).
+%% LEGEND: grey = outside party, green = process, blue = data store.
+flowchart TB
+  subgraph legend["KEY"]
+    direction LR
+    lg1@{ shape: rect, label: "grey: outside party" }
+    lg2@{ shape: rounded, label: "green: process" }
+    lg3@{ shape: cyl, label: "blue: data store" }
+    lg1 ~~~ lg2 ~~~ lg3
+  end
+
+  subgraph body[" "]
+    mpd@{ shape: rect, label: "**melrosepolice.net**<br/>· WordPress media API<br/>· weekly dispatch-log PDFs" }
+    gis@{ shape: rect, label: "**MassGIS and MassDOT**<br/>· address points, road centrelines, 2022 precincts" }
+    osm@{ shape: rect, label: "**OpenStreetMap tile server**" }
+    viewer@{ shape: rect, label: "**Author in a browser**" }
+
+    collect@{ shape: rounded, label: "**cities melrose collect: discover and download**" }
+    parse@{ shape: rounded, label: "**Parse entries**" }
+    fetchref@{ shape: rounded, label: "**cities melrose fetch-reference**" }
+    place@{ shape: rounded, label: "**Place: geocode, streets, wards**" }
+    export@{ shape: rounded, label: "**Export allowed fields**<br/>· call types listed in categories.toml" }
+    page@{ shape: rounded, label: "**Map page: filter and count**<br/>· Vite + TypeScript + Leaflet" }
+
+    raw@{ shape: cyl, label: "**data/melrose/raw**<br/>· PDFs by SHA-256" }
+    ref@{ shape: cyl, label: "**data/melrose/reference**<br/>· dated GeoJSON snapshots" }
+    db@{ shape: cyl, label: "**data/melrose/db.sqlite**<br/>· documents, entries, placements, runs" }
+    site@{ shape: cyl, label: "**site/public/data/melrose**<br/>· entries.json, wards.geojson" }
+
+    mpd -->|"media list; new PDFs"| collect
+    collect -->|"PDF as published"| raw
+    collect -->|"document row: URL, hash, upload date"| db
+    raw -->|"PDF text lines"| parse
+    parse -->|"entries verbatim, incl. place labels"| db
+    gis -->|"Melrose features"| fetchref
+    fetchref -->|"snapshot with fetch date"| ref
+    ref -->|"points, centrelines, ward polygons"| place
+    db -->|"location text"| place
+    place -->|"point, streets, wards, unmapped kind"| db
+    db -->|"current entries in shown categories"| export
+    ref -->|"ward polygons"| export
+    export -->|"label-free addresses; arrests as Arrest"| site
+    site -->|"records and wards"| page
+    osm -->|"basemap tiles"| page
+    page -->|"map, street ranking, ward table, source links"| viewer
+  end
+
+  legend ~~~ body
+  style body fill:none,stroke:none
+
+  classDef compute       fill:#d5f5e3,stroke:#1e8449,color:#145a32;
+  classDef data          fill:#d6eaf8,stroke:#2471a3,color:#1a5276;
+  classDef external      fill:#eaecee,stroke:#839192,color:#424949;
+  class lg1,mpd,gis,osm,viewer external
+  class lg2,collect,parse,fetchref,place,export,page compute
+  class lg3,raw,ref,db,site data
