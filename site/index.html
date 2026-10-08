@@ -13,10 +13,10 @@
     <main>
       <aside>
         <section class="filters" aria-label="Filters">
-          <label>From <input id="from" type="date" /></label>
-          <label>To <input id="to" type="date" /></label>
+          <label>From <input id="from" type="date" aria-describedby="date-error" /></label>
+          <label>To <input id="to" type="date" aria-describedby="date-error" /></label>
+          <p id="date-error" class="error" role="alert" hidden></p>
           <fieldset id="categories"><legend>Show</legend></fieldset>
-          <label>Result <select id="result"></select></label>
         </section>
         <p id="summary"></p>
         <table id="unmapped"></table>

@@ -7,13 +7,15 @@ import "./style.css";
 import {
   type Filters,
   type MarkerGroup,
+  STOPS,
   UNMAPPED,
+  dateError,
   dateRange,
   entryDetails,
   filterRecords,
   formatPerCrash,
   markerGroups,
-  resultOptions,
+  stopResultOptions,
   streetRanking,
   tally,
   wardTable,
@@ -91,31 +93,63 @@ async function main(): Promise<void> {
   from.value = range.from;
   to.value = range.to;
 
-  const categoryBoxes = byId("categories");
-  const checked = new Set(exported.categories.map((c) => c.key));
-  for (const c of exported.categories) {
+  // While To is earlier than From, the map and tables keep the last valid range, and the message
+  // says which range that is (design AC4a).
+  let shownRange = { from: range.from, to: range.to };
+  let rangeError: string | null = null;
+  const dateMessage = byId("date-error");
+  function onDateChange(edited: "from" | "to"): void {
+    const next = { from: from.value || range.from, to: to.value || range.to };
+    rangeError = dateError(next.from, next.to, edited);
+    if (rangeError === null) shownRange = next;
+    for (const input of [from, to]) {
+      if (rangeError === null) input.removeAttribute("aria-invalid");
+      else input.setAttribute("aria-invalid", "true");
+    }
+    dateMessage.hidden = rangeError === null;
+    dateMessage.textContent =
+      rangeError === null ? "" : `${rangeError} The map and tables still show ${shownRange.from} to ${shownRange.to}.`;
+    render();
+  }
+  from.addEventListener("change", () => onDateChange("from"));
+  to.addEventListener("change", () => onDateChange("to"));
+
+  function checkbox(text: string, set: Set<string>, key: string, className: string): HTMLLabelElement {
     const box = el("input");
     box.type = "checkbox";
     box.checked = true;
     box.addEventListener("change", () => {
-      if (box.checked) checked.add(c.key);
-      else checked.delete(c.key);
+      if (box.checked) set.add(key);
+      else set.delete(key);
       render();
     });
-    const swatch = el("span", undefined, "swatch");
-    swatch.style.background = colour.get(c.key) ?? "";
-    const row = el("label", undefined, "check");
-    row.append(box, swatch, el("span", c.label));
-    categoryBoxes.append(row);
+    const row = el("label", undefined, className);
+    row.append(box, el("span", text));
+    return row;
   }
 
-  const result = byId<HTMLSelectElement>("result");
-  result.append(new Option("All results", ""));
-  for (const option of resultOptions(exported.records)) result.append(new Option(option, option));
-  for (const control of [from, to, result]) control.addEventListener("change", render);
+  // The Stops box shows or hides the stop layer. The results beneath it are a separate filter that
+  // also drives the ward table and ranking, so unticking Stops leaves them as they are (A11, A13).
+  const categoryBoxes = byId("categories");
+  const checked = new Set(exported.categories.map((c) => c.key));
+  const stopResults = new Set(stopResultOptions(exported.records));
+  for (const c of exported.categories) {
+    const row = checkbox(c.label, checked, c.key, "check");
+    const swatch = el("span", undefined, "swatch");
+    swatch.style.background = colour.get(c.key) ?? "";
+    row.insertBefore(swatch, row.lastChild);
+    categoryBoxes.append(row);
+    if (c.key === STOPS) {
+      const results = el("div", undefined, "subchecks");
+      results.setAttribute("role", "group");
+      results.setAttribute("aria-label", "Stop results");
+      for (const option of stopResults) results.append(checkbox(option, stopResults, option, "check"));
+      categoryBoxes.append(results);
+    }
+  }
 
   function filters(): Filters {
-    return { from: from.value || range.from, to: to.value || range.to, categories: checked, result: result.value || null };
+    return { from: shownRange.from, to: shownRange.to, categories: checked, stopResults };
   }
 
   function popup(group: MarkerGroup): HTMLElement {
@@ -136,6 +170,7 @@ async function main(): Promise<void> {
   }
 
   function render(): void {
+    if (rangeError !== null) return;
     const f = filters();
     const shown = filterRecords(exported.records, f);
 
@@ -195,7 +230,7 @@ async function main(): Promise<void> {
       `${w.stopsMultiWard.entries} stops sit on a ward boundary and count toward more than one ward, adding ` +
       `${w.stopsMultiWard.extra} extra counts (crashes: ${w.crashesMultiWard.entries}, adding ${w.crashesMultiWard.extra}). ` +
       `${wardStops} ward counts − ${w.stopsMultiWard.extra} extra + ${w.unmappedStops} stops not on the map = ` +
-      `${w.totalStops} stops. The date range applies to both columns; the result filter to stops only.`;
+      `${w.totalStops} stops. The date range applies to both columns; the results ticked under Stops to stops only.`;
 
     const ranking = streetRanking(exported.records, f);
     const rankTable = byId<HTMLTableElement>("ranking");
@@ -209,7 +244,7 @@ async function main(): Promise<void> {
     }
     byId("ranking-note").textContent =
       `${ranking.countedTwice} intersection stops count toward both streets. ` +
-      `Includes stops with a street but no address. Follows the date range and result filter.`;
+      `Includes stops with a street but no address. Follows the date range and the results ticked under Stops.`;
   }
 
   render();

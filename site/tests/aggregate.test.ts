@@ -4,12 +4,13 @@ import {
   CRASHES,
   STOPS,
   type Filters,
+  dateError,
   dateRange,
   entryDetails,
   filterRecords,
   formatPerCrash,
   markerGroups,
-  resultOptions,
+  stopResultOptions,
   streetRanking,
   tally,
   wardTable,
@@ -62,7 +63,9 @@ const RECORDS: ExportRecord[] = [
 ];
 
 const BOTH = new Set([STOPS, CRASHES]);
-const all: Filters = { from: "2026-09-14", to: "2026-09-27", categories: BOTH, result: null };
+const STOP_RESULTS = new Set(["Verbal Warning", "Citation/Warning Issued", "Arrest"]);
+const all: Filters = { from: "2026-09-14", to: "2026-09-27", categories: BOTH, stopResults: STOP_RESULTS };
+const only = (...results: string[]): ReadonlySet<string> => new Set(results);
 const week: Filters = { ...all, from: "2026-09-21" };
 
 describe("the export contract", () => {
@@ -138,7 +141,9 @@ describe("AC7: the ward table reconciles", () => {
   const filters: [string, Filters][] = [
     ["everything", all],
     ["one week", week],
-    ["one result", { ...all, result: "Citation/Warning Issued" }],
+    ["one stop result", { ...all, stopResults: only("Citation/Warning Issued") }],
+    ["two stop results", { ...all, stopResults: only("Citation/Warning Issued", "Arrest") }],
+    ["no stop results", { ...all, stopResults: only() }],
     ["Stops unchecked", { ...all, categories: new Set([CRASHES]) }],
     ["nothing in range", { ...all, from: "2026-01-01", to: "2026-01-02" }],
   ];
@@ -184,9 +189,21 @@ describe("AC8 and AC8a: the street ranking", () => {
   });
 });
 
-describe("AC12: the result filter", () => {
-  it("changes markers, ranking and ward table together", () => {
-    const f: Filters = { ...all, categories: new Set([STOPS]), result: "Citation/Warning Issued" };
+describe("AC4a: an inverted date range", () => {
+  it("is reported whichever date was edited, worded after that date", () => {
+    expect(dateError("2026-09-22", "2026-09-21", "to")).toBe("To is earlier than From.");
+    expect(dateError("2026-09-22", "2026-09-21", "from")).toBe("From is later than To.");
+  });
+
+  it("is not an error when From and To are the same day", () => {
+    expect(dateError("2026-09-21", "2026-09-21", "to")).toBeNull();
+    expect(dateError("2026-09-14", "2026-09-27", "from")).toBeNull();
+  });
+});
+
+describe("AC12: the stop results ticked under Stops", () => {
+  it("change markers, ranking and ward table together", () => {
+    const f: Filters = { ...all, categories: new Set([STOPS]), stopResults: only("Citation/Warning Issued") };
     const shown = filterRecords(RECORDS, f);
     expect(shown.every((r) => r.result === "Citation/Warning Issued")).toBe(true);
     expect(markerGroups(shown).flatMap((g) => g.records)).toHaveLength(1);
@@ -196,12 +213,37 @@ describe("AC12: the result filter", () => {
     expect(t.rows.filter((row) => row.stops > 0).map((row) => row.ward)).toEqual(["1", "2", "4"]);
   });
 
-  it("narrows only the stops column: crashes still count, so stops per crash stays meaningful", () => {
-    const t = wardTable(RECORDS, { ...all, result: "Citation/Warning Issued" });
-    expect(t.rows.find((row) => row.ward === "4")?.crashes).toBe(2);
+  it("can be ticked several at once", () => {
+    const f: Filters = { ...all, categories: new Set([STOPS]), stopResults: only("Citation/Warning Issued", "Arrest") };
+    expect(filterRecords(RECORDS, f).map((r) => r.result).sort()).toEqual([
+      "Arrest",
+      "Citation/Warning Issued",
+      "Citation/Warning Issued",
+    ]);
+    expect(wardTable(RECORDS, f).totalStops).toBe(3);
   });
 
-  it("offers each result once, most frequent first", () => {
-    expect(resultOptions(RECORDS)).toEqual(["Verbal Warning", "* Report taken", "Citation/Warning Issued", "Arrest"]);
+  it("never narrow crashes: crash markers and the crashes column stay as they are", () => {
+    const f: Filters = { ...all, stopResults: only("Citation/Warning Issued") };
+    expect(filterRecords(RECORDS, f).filter((r) => r.category === CRASHES)).toHaveLength(3);
+    expect(wardTable(RECORDS, f).rows.find((row) => row.ward === "4")?.crashes).toBe(2);
+  });
+
+  it("with none ticked, show no stops but every crash", () => {
+    const f: Filters = { ...all, stopResults: only() };
+    expect(filterRecords(RECORDS, f).every((r) => r.category === CRASHES)).toBe(true);
+    expect(wardTable(RECORDS, f).totalStops).toBe(0);
+    expect(streetRanking(RECORDS, f).rows).toEqual([]);
+  });
+
+  it("still drive the ward table and ranking when Stops is unticked (A11)", () => {
+    const f: Filters = { ...all, stopResults: only("Citation/Warning Issued") };
+    const noStops: Filters = { ...f, categories: new Set([CRASHES]) };
+    expect(wardTable(RECORDS, noStops)).toEqual(wardTable(RECORDS, f));
+    expect(streetRanking(RECORDS, noStops)).toEqual(streetRanking(RECORDS, f));
+  });
+
+  it("are offered from stops only, most frequent first", () => {
+    expect(stopResultOptions(RECORDS)).toEqual(["Verbal Warning", "Citation/Warning Issued", "Arrest"]);
   });
 });

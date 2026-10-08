@@ -20,7 +20,7 @@ export interface Filters {
   from: string; // ISO date, inclusive
   to: string; // ISO date, inclusive
   categories: ReadonlySet<string>;
-  result: string | null; // null: every result
+  stopResults: ReadonlySet<string>; // the stop results ticked under Stops; crashes are never filtered by result
 }
 
 export function isMapped(r: ExportRecord): boolean {
@@ -32,7 +32,7 @@ function inDates(r: ExportRecord, f: Filters): boolean {
 }
 
 function hasResult(r: ExportRecord, f: Filters): boolean {
-  return f.result === null || r.result === f.result;
+  return r.category !== STOPS || f.stopResults.has(r.result);
 }
 
 /** Records matching every filter: what the markers and the unmapped counts show. */
@@ -47,9 +47,9 @@ export function dateRange(exported: MapExport): { from: string; to: string } {
   return { from: firsts[0] ?? "", to: lasts[lasts.length - 1] ?? "" };
 }
 
-/** Results to offer in the filter, most frequent first (design R12). */
-export function resultOptions(records: readonly ExportRecord[]): string[] {
-  const counts = countBy(records, (r) => [r.result]);
+/** Stop results to offer under Stops, most frequent first (design R12). */
+export function stopResultOptions(records: readonly ExportRecord[]): string[] {
+  const counts = countBy(records.filter((r) => r.category === STOPS), (r) => [r.result]);
   return [...counts.keys()].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0) || a.localeCompare(b));
 }
 
@@ -112,9 +112,8 @@ export interface WardTable {
 
 /**
  * Stops and crashes per ward (design R6). The table has a column per category, so the category
- * checkboxes do not apply to it. The date range applies to both columns and the result filter to
- * stops only: a crash's result says nothing about enforcement, and narrowing crashes by a stop
- * result would leave stops per crash meaningless (Ken Hoffmann, 2026-10-08).
+ * checkboxes do not apply to it. The date range applies to both columns and the ticked stop results
+ * to stops only: a crash's result says nothing about enforcement (A11, A13).
  */
 export function wardTable(records: readonly ExportRecord[], f: Filters): WardTable {
   const stops = rankedStops(records, f);
@@ -147,7 +146,7 @@ export interface StreetRanking {
 }
 
 /**
- * Streets by number of stops (design R7), under the date and result filters; like the ward table it
+ * Streets by number of stops (design R7), under the date range and ticked stop results; like the ward table it
  * has its own category, so the checkboxes do not apply. Stops with a street but no address count too
  * (AC8), and an intersection stop counts toward both its streets (AC8a).
  */
@@ -166,6 +165,15 @@ export function streetRanking(records: readonly ExportRecord[], f: Filters): Str
 
 function rankedStops(records: readonly ExportRecord[], f: Filters): ExportRecord[] {
   return records.filter((r) => r.category === STOPS && inDates(r, f) && hasResult(r, f));
+}
+
+/**
+ * The message for a date range whose To is earlier than its From (design AC4a), worded after the
+ * input just edited, or null when the range is valid. Both ends are inclusive, so From = To is one day.
+ */
+export function dateError(from: string, to: string, edited: "from" | "to"): string | null {
+  if (from <= to) return null;
+  return edited === "to" ? "To is earlier than From." : "From is later than To.";
 }
 
 function countBy(records: readonly ExportRecord[], keys: (r: ExportRecord) => readonly string[]): Map<string, number> {
