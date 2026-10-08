@@ -1,6 +1,6 @@
 # Melrose traffic stops map — design spec
 
-- **Status:** Approved by Ken Hoffmann, 2026-10-03. Amended with A1–A6 from the technical spec, approved by Ken Hoffmann, 2026-10-03, with A7–A9, approved by Ken Hoffmann, 2026-10-07, with A10–A11, approved by Ken Hoffmann, 2026-10-08, and with A12–A14, asked for and approved by Ken Hoffmann, 2026-10-08.
+- **Status:** Approved by Ken Hoffmann, 2026-10-03. Amended with A1–A6 from the technical spec, approved by Ken Hoffmann, 2026-10-03, with A7–A9, approved by Ken Hoffmann, 2026-10-07, with A10–A11, approved by Ken Hoffmann, 2026-10-08, and with A12–A15, asked for and approved by Ken Hoffmann, 2026-10-08.
 - **Date:** 2026-10-03
 - **Author:** Ken Hoffmann
 - **Ticket:** none
@@ -77,7 +77,7 @@ Nothing has been built yet. What was checked on 2026-10-03:
 | <a name="r9"></a>R9 | Must | G4 | Selecting a marker shows its call number, date, time, call type, result (any arrest result shown as "Arrest") and address, with a link to the weekly log it came from. |
 | <a name="r10"></a>R10 | Must | G4 | Display only the address part of a location, never the name of a place or household. The original text stays in storage. |
 | <a name="r11"></a>R11 | Must | G3, G4 | Collecting a week that was already collected changes nothing: no duplicates and no changed counts. |
-| <a name="r12"></a>R12 | Should | G1 | Filter stops by result: one checkbox per stop result (e.g. Verbal Warning, Citation/Warning Issued, Unit Clear) beneath Stops, any number ticked. Crashes are not filtered by result (A13). A result the log prints cut short is shown as its full form when only one known result completes it (`Citation/Warning` as Citation/Warning Issued), so the filter catches it; storage keeps the printed text (A10). |
+| <a name="r12"></a>R12 | Should | G1 | Filter stops by result: one checkbox per stop result (e.g. Verbal Warning, Citation/Warning Issued, Unit Clear) beneath Stops, any number ticked. Crashes are not filtered by result (A13). Beside each result is its number of stops in the date range, the same whether it is ticked or not (A15). A result the log prints cut short is shown as its full form when only one known result completes it (`Citation/Warning` as Citation/Warning Issued), so the filter catches it; storage keeps the printed text (A10). |
 
 ## Acceptance criteria
 
