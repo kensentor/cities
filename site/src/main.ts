@@ -8,6 +8,7 @@ import {
   type Filters,
   type MarkerGroup,
   STOPS,
+  categoryCounts,
   UNMAPPED,
   dateError,
   dateRange,
@@ -135,11 +136,15 @@ async function main(): Promise<void> {
   const checked = new Set(exported.categories.map((c) => c.key));
   const stopResults = new Set(stopResultOptions(exported.records));
   const resultCounts = new Map<string, HTMLSpanElement>();
+  const shownCounts = new Map<string, HTMLSpanElement>();
   for (const c of exported.categories) {
     const row = checkbox(c.label, checked, c.key, "check");
     const swatch = el("span", undefined, "swatch");
     swatch.style.background = colour.get(c.key) ?? "";
     row.insertBefore(swatch, row.lastChild);
+    const count = el("span", undefined, "count");
+    shownCounts.set(c.key, count);
+    row.append(count);
     categoryBoxes.append(row);
     if (c.key === STOPS) {
       const results = el("fieldset", undefined, "subchecks");
@@ -187,6 +192,8 @@ async function main(): Promise<void> {
 
     const counts = stopResultCounts(exported.records, f);
     for (const [option, count] of resultCounts) count.textContent = String(counts.get(option) ?? 0);
+    const perCategory = categoryCounts(exported.records, f);
+    for (const [key, count] of shownCounts) count.textContent = String(perCategory.get(key) ?? 0);
 
     markers.clearLayers();
     for (const group of markerGroups(shown)) {

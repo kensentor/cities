@@ -4,6 +4,7 @@ import {
   CRASHES,
   STOPS,
   type Filters,
+  categoryCounts,
   dateError,
   dateRange,
   entryDetails,
@@ -257,6 +258,14 @@ describe("AC12: the stop results ticked under Stops", () => {
     expect(counts(week)).toEqual({ "Verbal Warning": 4, "Citation/Warning Issued": 2, Arrest: 1 });
     const unticked: Filters = { ...week, categories: new Set([CRASHES]), stopResults: only() };
     expect(counts(unticked)).toEqual(counts(week));
+  });
+
+  it("add up to the count beside Stops, which like Crashes' ignores every tick (A15)", () => {
+    const perCategory = (f: Filters) => Object.fromEntries(categoryCounts(RECORDS, f));
+    expect(perCategory(all)).toEqual({ [STOPS]: 8, [CRASHES]: 3 });
+    expect(perCategory({ ...week, categories: new Set(), stopResults: only() })).toEqual({ [STOPS]: 7, [CRASHES]: 3 });
+    const results = [...stopResultCounts(RECORDS, all).values()].reduce((a, b) => a + b, 0);
+    expect(results).toBe(categoryCounts(RECORDS, all).get(STOPS));
   });
 
   it("are offered from stops only, most frequent first", () => {

@@ -54,6 +54,14 @@ export function stopResultOptions(records: readonly ExportRecord[]): string[] {
 }
 
 /**
+ * Entries per category in the date range, shown beside each Show box (design R4). No tick changes
+ * it, so a count reads the same ticked or not (A15).
+ */
+export function categoryCounts(records: readonly ExportRecord[], f: Filters): Map<string, number> {
+  return countBy(records.filter((r) => inDates(r, f)), (r) => [r.category]);
+}
+
+/**
  * Stops per result in the date range, shown beside each result box (design R12). The ticks, including
  * the Stops box, do not change it, so a count reads the same ticked or not (A15).
  */
