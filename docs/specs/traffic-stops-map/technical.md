@@ -1,6 +1,6 @@
 # Melrose traffic stops map — technical spec
 
-- **Status:** Approved by Ken Hoffmann, 2026-10-07
+- **Status:** Approved by Ken Hoffmann, 2026-10-07. Revised the same day during phase 1: build details, experiment E9, and requirements feedback A7–A8, which affect must-have requirements and await Ken's response.
 - **Date:** 2026-10-03, revised 2026-10-07
 - **Author:** Ken Hoffmann
 - **Requirements:** [design.md](design.md), owner Ken Hoffmann, approved 2026-10-03 and amended the same day with A1–A6 from this spec (see [Requirements feedback](#requirements-feedback)). Read as amended, 2026-10-03.
@@ -108,7 +108,7 @@ Data flow, with the components named as built. The source and its validated rend
 ![Data flow](data-flow.svg)
 
 - **Discover and download** asks the media API for PDFs attached to the police-logs page (`parent=160`) uploaded on or after 2026-07-20. It downloads only media ids it hasn't seen, waiting 2 s between requests and sending an honest user agent.
-- **Parse** groups pdfplumber's words into lines by position, removes page furniture, and builds entries. Results are split from call types by a list of known results; an unknown result quarantines the whole document. A week's dates come from its `For Date:` headings, never from its title.
+- **Parse** groups pdfplumber's words into lines, removes page furniture, and builds entries. A call line opens an entry and each label (`Location/Address:`, `ID:`, `Refer To …:` and so on) opens a field. An unlabelled line joins the field before it only if its first word would not have fitted on the previous line; the logs are set in a fixed-width font, so a line's right edge shows how much room was left (E9). Anything else is reported as a leftover and kept only in `raw_block`. Results are split from call types by a list of known results, including the ones the department prints cut short; an unknown result quarantines the whole document. An entry's location is its first location line, and only if no `ID:`, `Refer To` or `Charges:` line precedes it (A8, locations left by withheld entries). A week's dates come from its `For Date:` headings, never from its title.
 - **Place** puts a point on each entry and assigns its streets and wards.
 - **Export** writes the allowed fields for entries whose call type is listed in `categories.toml`.
 - **Map page** loads the export once and keeps all state in memory.
@@ -120,12 +120,16 @@ The Python package follows the house hexagonal pattern (the `hexagonal-python` s
 | Port (driven) | Adapter in v1 | Kept in the core |
 |---|---|---|
 | `LogSource`: find and fetch published logs | WordPress media API (httpx) | Which documents are in scope, by upload date (T10, a log's week comes from its contents) |
-| `LogReader`: read the entries in a log | pdfplumber line parser | The completeness check and quarantine decision; arrest collapse |
+| `LogReader`: read the entries in a log | pdfplumber lines through a line grammar (`log_grammar.py`) that only observes | Splitting call type from result, dates for entries before the first heading, the completeness check and quarantine decision, which location line is the entry's own; arrest collapse (phase 3) |
+| `LogArchive`: keep each published log as downloaded | Files in `data/melrose/raw/`: the PDF under its SHA-256, plus a JSON sidecar per media id | — (the sidecar is what lets `rebuild` work from a clone, because the database is git-ignored) |
 | `Gazetteer`: locate addresses and streets, and describe the wards around a point | Snapshots of MassGIS and MassDOT data (shapely, pyproj) | The boundary rule. The adapter reports observations such as "this street runs along the ward 1/4 edge here", applying the rule 5 geometry thresholds, and the core decides the entry counts toward both wards. Also unmapped classification and the label-free address |
 | `EntryRepository`: keep documents, versions, placements and runs | SQLite | Which version is current, and withdrawal (T15, latest covering log wins) |
 | `MapPublisher`: publish what the page may show | JSON files in `site/public/data/melrose/` | The category selection and field allowlist. The core hands over finished public records, so a later compacted or per-year export (Rollout, backfill gate) only changes serialisation and can't weaken [R10](design.md#r10) (address only, never place names) |
-| `ReferenceSource`: fetch reference layers | ArcGIS REST queries | — |
+| `ReferenceSource`: fetch reference layers | ArcGIS REST queries | Keeping the previous snapshot when any layer comes back short |
+| `ReferenceStore`: keep the reference snapshot | GeoJSON files and `manifest.json` in `data/melrose/reference/` | — |
 | `Clock` | System clock | — (exists so exports are reproducible in tests) |
+
+`Gazetteer` and `MapPublisher` are declared in the phases that use them (2 and 3), so no port ships without an implementer. Two slots the pattern does not name follow the skill's §2: `settings.py` (data paths, the start date, the reference layers, `call_types.txt`) is a layer read only by `composition.py`, and `handler.py` is the `cities melrose` entry point above it. The contracts are in `pyproject.toml`; each was proven on 2026-10-07 by planting one violation it forbids.
 
 The only driver is the CLI, which calls one use case per command (`collect`, `rebuild`, `export`, `fetch_reference`, `sample`). A later scheduled driver (automatic pickup, design Later) would call the same use cases. Adapters translate errors as well as data: an HTTP 403 or timeout becomes `LogSourceUnavailable`, an unreadable PDF becomes `LogUnreadable`, and nothing from httpx, pdfplumber or sqlite3 crosses a port.
 
@@ -160,20 +164,23 @@ A new repo, `map` (this one). Nothing outside it changes.
 pyproject.toml, uv.lock     Python package `cities`; console script `cities`
 src/cities/cli.py           top-level command; one subcommand group per city
 src/cities/melrose/
-  domain/                   stdlib dataclasses: Entry, PublishedLog, Placement, PublicRecord …
+  domain/                   stdlib dataclasses: PublishedLog, RawEntry, EntryVersion, Placement, PublicRecord …; the known results
   ports/inbound.py          use cases the CLI calls
-  ports/outbound.py         LogSource, LogReader, Gazetteer, EntryRepository, MapPublisher, ReferenceSource, Clock
-  core/                     the use cases and rules (versions, counting, privacy, categories)
+  ports/outbound.py         LogSource, LogReader, LogArchive, Gazetteer, EntryRepository, MapPublisher, ReferenceSource, ReferenceStore, Clock
+  core/                     the use cases (collect | rebuild | reference …) over shared loading, over pure rules
   adapters/inbound/cli.py   the `cities melrose` subcommands
-  adapters/outbound/        wordpress.py, pdf_reader.py, gazetteer.py, sqlite_repo.py, json_publisher.py, arcgis.py
+  adapters/outbound/        wordpress.py, pdf_reader.py + log_grammar.py, log_archive.py, gazetteer.py, sqlite_repo.py, json_publisher.py, arcgis.py, reference_files.py, clock.py
   stubs.py                  in-memory fakes of every outbound port
+  settings.py               data paths, start date, reference layers; read only by composition
   composition.py            the only place adapters are built and wired
+  handler.py                the `cities melrose` entry point
   categories.toml           which call types the map shows, grouped into categories
   call_types.txt            every call type seen so far; collect reports new ones
-.importlinter               layer and forbidden-import contracts
-tests/melrose/              pytest; fixtures/ holds real PDFs, recorded API responses and golden JSON
-data/melrose/raw/           source PDFs, committed (evidence that every figure is checkable; ~60 KB/week)
-data/melrose/reference/     dated GeoJSON snapshots and manifest.json, committed (~3.9 MB)
+pyproject.toml              also holds the import-linter contracts and the pyright settings
+README.md                   setup, commands, ports, and the named tests for invariants that fail silently
+tests/melrose/              pytest; reads real logs from data/melrose/raw; fixtures/ holds recorded API responses and golden JSON
+data/melrose/raw/           committed: source PDFs as <sha256>.pdf, plus <media id>.json saying which upload each was (~60 KB/week)
+data/melrose/reference/     dated GeoJSON snapshots and manifest.json, committed (3.3 MB on 2026-10-07)
 data/melrose/db.sqlite      git-ignored; rebuilt from raw + reference by `cities melrose rebuild`
 site/                       package.json, vite.config.ts, src/{main,aggregate,types}.ts, tests
 site/public/data/melrose/   export output, git-ignored
@@ -186,11 +193,11 @@ Each city gets its own namespace: a subcommand group, a package and a data direc
 
 SQLite, five tables. Column-level definitions are in [Appendix D](#appendix-d-storage-and-export-formats).
 
-- **documents** — one row per published log, keyed by its WordPress media id, with its SHA-256, upload time, the date range found inside it, and a status (`loaded` / `out_of_scope` / `quarantined`). A document whose latest date is before 2026-07-20 is recorded as `out_of_scope`, so it is never downloaded again.
+- **documents** — one row per published log, keyed by its WordPress media id, with its SHA-256, upload and modification times, the date range found inside it, and a status (`loaded` / `out_of_scope` / `quarantined`). A document whose latest date is before 2026-07-20 is recorded as `out_of_scope`, so it is never downloaded again. Every downloaded log is archived, out-of-scope and quarantined ones included, so `rebuild` from the archive gives the same documents as incremental collection.
 - **entry_versions** — one row per (call number, document): the entry as that log published it, verbatim, with its page. Rows are never updated.
 - **entries** — one row per call number, pointing at its current version, with status `current` or `withdrawn`. Derived on every run: the current version comes from the most recently uploaded log (ties broken by media id) whose date range covers the entry's date. If that log doesn't contain the call number, the entry is `withdrawn`: it stays in storage but is not exported. Logs are re-issued with different contents (E7), and this rule makes the map follow the department's latest publication, including locations it later withholds.
 - **placements** — one row per current entry: its kind (`address`, `intersection`, `street_only`, `none`, `unplaced`), the label-free display address, point, streets, wards, and the reference snapshot used. Rebuilt in full on every run.
-- **runs** — one row per run, with the counts `collect` reports, so a change between runs can be explained.
+- **runs** — one row per run that wrote something, with the counts `collect` reports, so a change between runs can be explained. A `collect` that finds nothing new writes no row.
 
 The rules that fill `placements` are in [Appendix C](#appendix-c-placement-rules): extracting the address, matching street names, address and intersection lookup, the ward-boundary test (rule 5), and the street keys used in the ranking.
 
@@ -210,12 +217,12 @@ The ward table's stops and crashes columns and the street ranking read the `stop
 
 ## Interfaces
 
-All commands are run through `uv run cities melrose …`. Exit code 0 means success, 1 means some documents were quarantined (the rest still loaded), and 2 means a network or HTTP failure (nothing is written).
+All commands are run through `uv run cities melrose …`. Exit code 0 means success, 1 means some documents were quarantined (the rest still loaded), 2 means a network or HTTP failure (nothing is written), and 3 means a local storage failure. `collect` downloads every new log before writing anything, which is what makes exit 2 write nothing.
 
 - **`fetch-reference`** downloads the Melrose features from the three reference layers ([Appendix B](#appendix-b-external-sources)) into dated GeoJSON snapshots with a manifest. It fails if the downloaded count differs from the server's count, and in that case it keeps the previous snapshot.
-- **`collect [--since 2026-07-20]`** runs discover → download → parse → place → export. It prints new documents, new entries, quarantined documents with the offending line, conflicts, unknown streets, and the placement rate. It also lists call types not yet in `call_types.txt`, entries whose versions differ between logs, entries newly withdrawn, and dates since Jul 20 with no entries. Running it twice in a row writes nothing the second time.
+- **`collect [--since 2026-07-20]`** runs discover → download → parse → place → export. It prints new documents, new entries, quarantined documents with the offending line, conflicts, unknown streets, and the placement rate. It also lists call types not yet in `call_types.txt`, entries whose versions differ between logs, entries newly withdrawn, dates since Jul 20 with no entries, and source damage loaded anyway (entries with no call number, trailing locations, leftover lines, results printed cut short). Running it twice in a row writes nothing the second time. In phase 1 it stops after parse.
 - **`export`** re-runs only the export, after a change to `categories.toml`.
-- **`rebuild`** clears `entry_versions`, `entries` and `placements`, re-parses every PDF in `data/melrose/raw/`, then places and exports. Its output must equal that of incremental collection, which [AC11](design.md#ac11) (re-collecting leaves every count unchanged) tests.
+- **`rebuild`** clears `entry_versions`, `entries` and `placements`, re-parses every PDF in `data/melrose/raw/` using its sidecar for which upload it was, then places and exports. Its output must equal that of incremental collection, which [AC11](design.md#ac11) (re-collecting leaves every count unchanged) tests.
 - **`sample --n N [--seed S]`** prints N random placed entries, for [AC3](design.md#ac3) (20 random markers within one block).
 - **Export file** (`site/public/data/melrose/entries.json`) is the contract between Python and the page: `{generated_at, reference_version, categories[], documents[], records[]}`. Each record carries only call number, date, time, category, call type, result (arrests collapsed to "Arrest"), the rebuilt address (null unless placed by address or intersection), a vicinity flag, kind, point, streets, wards (0–3), and a document and page reference. No other location text leaves SQLite. The full type is in [Appendix D](#appendix-d-storage-and-export-formats).
 - **The map page** (`npm run dev` / `npm run build` in `site/`) reads `data/melrose/entries.json` and `data/melrose/wards.geojson`, and keeps its state in the page. It builds the category filter and map layers from the export's `categories[]`.
@@ -278,7 +285,7 @@ The command is run by hand, so failures appear in its output; there are no silen
 
 ## Requirements feedback
 
-All six items were approved by the requirements owner and applied to design.md on 2026-10-03, so none blocks approval. The design spec's Current state was corrected at the same time (187 entries in the Sep 21–27 log, not 183, per E2; archive depth per E1).
+A1–A6 were approved by the requirements owner and applied to design.md on 2026-10-03. The design spec's Current state was corrected at the same time (187 entries in the Sep 21–27 log, not 183, per E2; archive depth per E1). A7 and A8 came out of phase 1 (E9) and await a response; phase 1 is built to the proposal in each, and both choices can be reversed by a `rebuild`, because every PDF is kept.
 
 | # | Proposed change and evidence | Affects must-have | Owner | Response |
 |---|---|---|---|---|
@@ -288,6 +295,8 @@ All six items were approved by the requirements owner and applied to design.md o
 | A4 | Add a third unmapped group, "address not found", for address or intersection entries that couldn't be placed ([R8](design.md#r8), unmapped counts; design D11). Evidence: E4 left 4 of 399 unplaced; folding them into "no location" would hide a placement failure as a gap in the log. | Yes ([R8](design.md#r8)) | Ken Hoffmann | Approved, Ken Hoffmann, 2026-10-03; applied to design.md |
 | A5 | Define Crashes as MOTOR VEHICLE ACCIDENT, ACCIDENT HIT & RUN and MVA - Not Investigated, and have the filter offer categories (Stops, Crashes) rather than call types ([R4](design.md#r4), map and filters; [AC5](design.md#ac5), filter options; design D2). Evidence: E7 counted 723, 56 and 55 of the three types, so MOTOR VEHICLE ACCIDENT alone leaves out about 13% of crashes. | Yes ([R4](design.md#r4)) | Ken Hoffmann | Approved, Ken Hoffmann, 2026-10-03; applied to design.md |
 | A6 | Move places other than Melrose from a non-goal to Later; v1 prepares only a separate namespace per city, with no shared code (design D12, T13). Evidence: a scope change the author asked for during the interview; the per-city namespace would otherwise contradict the non-goal. | No | Ken Hoffmann | Approved, Ken Hoffmann, 2026-10-03; applied to design.md |
+| A7 | Accept that an entry printed without a call number is reported on every run but not stored, so [R1](design.md#r1) (collect every entry) and [R2](design.md#r2) (store each entry with its call number) cannot be met for it. Evidence: E9 found 2 in the 11 logs since Jul 20 (Jul 20–26, a 09:13 Animal Complaint; Aug 17–23, a 15:59 Well Being Check), each a time and call type with the call number missing from the page; the completeness check cannot see them, because it counts printed call numbers. Rejected alternatives: inferring the number from the one gap in the call-number sequence, or from the entry's `Refer To` line, which in 5 other entries names a different call (E9); either puts an unprinted number on a figure meant to trace to the log ([G4](design.md#goals), every figure checkable). | Yes ([R1](design.md#r1), [R2](design.md#r2)) | Ken Hoffmann | Pending |
+| A8 | Define an entry's location as its first location line, and only when no `ID:`, `Refer To` or `Charges:` line precedes it; any other location line is kept in `raw_block`, reported, and never shown ([R2](design.md#r2), location as published; [R3](design.md#r3), place each entry; [R10](design.md#r10), never show a place or household name). Evidence: E9 found 7 entries with a second location line or one after their reference lines. In 6, a gap in the call numbers or a `Refer To` naming another call shows the line belongs to an entry the department withheld, often under the Domestic Violence Act, so using it would put a withheld entry's location on the map. Cost: 26-10437 (Aug 31–Sep 6) may lose a second location of its own, `BEECH AVE`; there is no gap there to tell. | Yes ([R3](design.md#r3), [R10](design.md#r10)) | Ken Hoffmann | Pending |
 
 ## Open questions
 
@@ -300,11 +309,11 @@ All six items were approved by the requirements owner and applied to design.md o
 ## Docs to update
 
 - design.md header: link to this spec. Done in the same change.
-- A README for the repo, covering setup, `fetch-reference`, `collect` and `npm run dev`, and listing the ports and the named tests for invariants that would otherwise fail silently (version choice, label-free addresses, arrest collapse, categories). Written in phase 1.
+- A README for the repo, covering setup, `fetch-reference`, `collect` and `npm run dev`, and listing the ports and the named tests for invariants that would otherwise fail silently (version choice, label-free addresses, arrest collapse, categories). Written in phase 1 for what phase 1 built; phases 2 and 3 add `npm run dev`, placement, arrest collapse and categories.
 
 ## Appendix A: experiments
 
-All were run on 2026-10-03 in a scratch directory outside the repo.
+E1–E8 were run on 2026-10-03 in a scratch directory outside the repo; E9 is phase 1's run of the built collector, on 2026-10-07.
 
 | # | What | Result | Not exercised |
 |---|---|---|---|
@@ -316,6 +325,7 @@ All were run on 2026-10-03 in a scratch directory outside the repo.
 | E6 | Ward-boundary test | Of 388 placed entries: 244 in one ward, 135 in two, 9 in three | Whether the rule 5 thresholds are right (Q2); the two crash types added later |
 | E7 | Wider sample, 94 logs | No pedestrian or bicycle call type; three crash call types; logs re-issued with different contents | Logs before 2018, including the daily 2014 format (Q4) |
 | E8 | Size and speed at backfill scale | 65k records: 21.4 MB raw, 3.25 MB gzipped; filtering and counting 20 ms | Leaflet rendering in a browser; the backfill gate covers it |
+| E9 | The line grammar over the 11 logs uploaded since Jul 20 | All 11 load, none quarantined; 1,958 entries for Jul 20–Sep 27; 2 entries with no call number, 7 trailing locations, 24 leftover lines, 23 results printed cut short; [AC1](design.md#ac1) (Sep 21–27 count and 10 entries' fields) passes against a golden file built from `pdftotext`, not from the parser | Logs before Jul 2026; a font size other than 12 or 14 pt; Ken's hand check of the golden file |
 
 ### Results
 
@@ -327,6 +337,8 @@ All were run on 2026-10-03 in a scratch directory outside the repo.
 - **E6, wards:** measured before the crash definition widened, so on 388 placed stops and MOTOR VEHICLE ACCIDENT entries: 244 counted toward one ward, 135 toward two and 9 toward three. The top boundary locations are 350 Lynn Fells Pkwy @ Tremont St (wards 1/4) and 977 Main St @ Reading Hill Ave (1/2). This uses the rule-5 thresholds, which haven't been reviewed.
 - **E7, wider sample:** 94 logs (19,994 entries) uploaded since Jan 2025, covering Dec 30, 2024 to Sep 27, 2026, plus re-uploads from 2018 and 2021. About 75 distinct call types. **No pedestrian or bicycle call type exists, and neither word appears in any entry.** Crash-like types: MOTOR VEHICLE ACCIDENT 723, ACCIDENT HIT & RUN 56, MVA - Not Investigated 55. Re-issued logs: Apr 6–12, 2026 was uploaded twice, and the versions share 158 entries, 18 of which differ, some by a location given in one version and withheld in the other (in both directions). One entry is only in the earlier version and one only in the later. The second upload was titled Apr 13–19, so that week is missing from the site. One 2025 log covers about Apr 5–11 and overlaps two weekly logs. Lines where two entries merged, and missing first headings, recur.
 - **E8, size and speed:** v1's 10 weeks average 42 stops and crashes a week; across E7's 91 weeks the median is 53 (max 99), and distinct location strings grow sub-linearly (1,473 for 5,000 records). Synthetic exports of 35k and 65k records, resampled from real records into the export shape, measure 11.5 / 21.4 MB raw and 1.75 / 3.25 MB gzipped (about 330 bytes a record). In Node 24, `JSON.parse` takes 28 / 43 ms. A full-range filter plus street ranking, ward table and point grouping takes a median of 10 / 20 ms. Extrapolated distinct points: about 5k / 8k.
+
+- **E9, phase 1:** the logs are Courier at 12 pt (7.2 pt a character, at most 64 to a line) or 14 pt (8.4 pt, at most 55), from a left margin at 72 pt to a right one near 540. Word wraps only when the next word does not fit, so an unlabelled line can be a wrap only if `previous right edge + character width × (1 + length of its first word)` exceeds 539; a line that ended exactly at 540 wrapped. An independent review applied this to all 422 unlabelled lines in the 11 logs: every line it rejects is a leftover (`:`, `L`, `*`, charge lines after a removed `Charges:` label, `AVE` after a removed location, `42 GROVE ST` after page furniture) or one of the 2 entries with no call number, and no genuine wrap is rejected. Withheld entries leave their trailing lines behind: a second location, a `Refer To` naming another call (26-9381→9382, 9415→9417, 9896→9897, 10425→10426, 11075→11076), or the `26` of a removed call number under 26-8623. Charges print one per line, as a list. Results printed cut short: `Taken/Referred to Other` (17 times), `Citation/Warning`, `* Report`, `Summons Not`, `Restraining`, `Restraining Order`, `False Alarm/Cancelled Alarm Co`, and `* Arrest 17` without its sex. A second `collect` wrote nothing, and `rebuild` gave documents, versions and entries identical to the incremental run.
 
 ### Method
 
@@ -343,13 +355,13 @@ Scratch environment: uv venv with pdfplumber 0.11.10, shapely 2.1.2 and pyproj 3
 
 | Source | Access | Format and behaviour (checked 2026-10-03) |
 |---|---|---|
-| Dispatch logs | `GET https://melrosepolice.net/wp-json/wp/v2/media?parent=160&after=2026-07-20T00:00:00&per_page=100&_fields=id,date,modified,source_url,title`, then the PDF URL | 774 PDFs in all, back to 2014-03-15; 11 uploaded since Jul 20. Text PDFs (Word → Ghostscript), 15 pages, ~60 KB. Titles are unreliable: a Jul 27–Aug 2 log is titled "June 27 to Aug 2", the May 25 log was uploaded twice, and 2018 and 2021 logs were uploaded in 2026. Upload lag after the week ends was 1–11 days over the last 10 weeks. The site is behind Cloudflare: the listing page returned 403 to the user agent `Mozilla/5.0`, and 200 to a full browser, curl, python-requests and a custom user agent. `robots.txt` restricts only bingbot. |
-| Address points | MassGIS Master Address Points FeatureServer/0, `GEOGRAPHIC_TOWN='MELROSE'`, 2000 per page | 14,216 points; street names spelled out ("MAIN STREET"). |
-| Road centrelines | MassGIS-MassDOT Roads FeatureServer/0 (services1.arcgis.com/hGdibHYSPO59RG1h), `MGIS_TOWN='MELROSE'` | 1,102 segments; 139 unnamed; 915 carry AADT, which is useful for the Later "busy streets" goal. |
-| Wards | MassGIS WardsPrecincts2022 FeatureServer/0, `TOWN='MELROSE'` | 14 precincts, wards 1–7. |
+| Dispatch logs | `GET https://melrosepolice.net/wp-json/wp/v2/media?parent=160&after=2026-07-20T00:00:00&per_page=100&orderby=id&order=asc&_fields=id,date_gmt,modified_gmt,source_url,title`, following `X-WP-TotalPages`, then the PDF URL | 774 PDFs in all, back to 2014-03-15; 11 uploaded since Jul 20. Text PDFs (Word → Ghostscript), 15 pages, ~60 KB. Titles are unreliable: a Jul 27–Aug 2 log is titled "June 27 to Aug 2", the May 25 log was uploaded twice, and 2018 and 2021 logs were uploaded in 2026. Upload lag after the week ends was 1–11 days over the last 10 weeks. The site is behind Cloudflare: the listing page returned 403 to the user agent `Mozilla/5.0`, and 200 to a full browser, curl, python-requests and a custom user agent. `robots.txt` restricts only bingbot. |
+| Address points | `https://arcgisserver.digital.mass.gov/arcgisserver/rest/services/AGOL/MassGIS_Master_Address_Points/FeatureServer/0`, `GEOGRAPHIC_TOWN='MELROSE'`, fields `MASTER_ADDRESS_ID, FULL_NUMBER_STANDARDIZED, STREET_NAME`, 2000 per page, `f=geojson`, `outSR=4326` | 14,216 points (again on 2026-10-07); street names spelled out ("MAIN STREET"). |
+| Road centrelines | `https://services1.arcgis.com/hGdibHYSPO59RG1h/ArcGIS/rest/services/MassDOTRoads_gdb/FeatureServer/0`, `MGIS_TOWN='MELROSE'`, fields `RD_SEG_ID, STREET_NAME, AADT` | 1,102 segments; 139 unnamed; 915 carry AADT, which is useful for the Later "busy streets" goal. |
+| Wards | `https://services1.arcgis.com/hGdibHYSPO59RG1h/ArcGIS/rest/services/Wards_Precincts_gdb/FeatureServer/0`, `TOWN='MELROSE'`, fields `WP_NAME, WARD, PRECINCT` | 14 precincts, wards 1–7. |
 | Basemap | OpenStreetMap standard tiles | Requires "© OpenStreetMap contributors" attribution. Light personal use falls within the [tile usage policy](https://operations.osmfoundation.org/policies/tiles/). |
 
-How the log PDF varies, with each variant drawn from the 94 parsed PDFs (E7): results and locations wrap onto following lines. Some pages carry page furniture: `Melrose Police Department Page: N`, `Dispatch Log From: … Thru: …`, `Printed: …`, and `Call Number Time Call Reason Action`. Lines reading only `L` or `:` are left over from redactions. Other line prefixes are `Location:`, `Charges:`, and `Refer To Incident/Arrest/Summons:`. Two entries can share one line when a call number wraps, which the completeness check catches. Logs are sometimes re-issued, or cover an irregular date range that overlaps other logs (E7). 5 of 94 logs, including Jul 20, lack their first `For Date:` heading, so for that case the entries before the first heading take the day before it. That is checked against the document's `Dispatch Log From` header where one exists, and the document is quarantined if the two disagree.
+How the log PDF varies, with each variant drawn from the 94 parsed PDFs (E7): results and locations wrap onto following lines. Some pages carry page furniture: `Melrose Police Department Page: N`, `Dispatch Log From: … Thru: …`, `Printed: …`, and `Call Number Time Call Reason Action`. Lines reading only `L` or `:` are left over from redactions. Other line prefixes are `Location:`, `Charges:`, and `Refer To Incident/Arrest/Summons:`. Two entries can share one line when a call number wraps, which the completeness check catches. Logs are sometimes re-issued, or cover an irregular date range that overlaps other logs (E7). 5 of 94 logs, including Jul 20, lack their first `For Date:` heading, so for that case the entries before the first heading take the day before it. That is checked against the document's `Dispatch Log From` header where one exists, and the document is quarantined if the two disagree. Phase 1 found more variation in the 11 logs since Jul 20 (E9): page furniture in 5 of them, sometimes mid-entry; `To Arrest:` without `Refer`; charges printed one per line; results printed cut short; trailing lines left by withheld entries; two entries with no call number; and a hyphen ending a word that wraps with no space (`CENTER-` / `NURSING HOME`), which joins with no space.
 
 ## Appendix C: placement rules
 
@@ -366,11 +378,17 @@ How the log PDF varies, with each variant drawn from the 94 parsed PDFs (E7): re
 
 Times are as published (`HHMM`); dates are ISO.
 
-- **documents** — `id` (WordPress media id, PK), `source_url`, `title`, `uploaded_at`, `sha256`, `fetched_at`, `first_date`, `last_date`, `status` (`loaded` / `out_of_scope` / `quarantined`), `error`.
-- **entry_versions** — PK (`call_number`, `document_id`); `page`, `date`, `time`, `call_type`, `result`, `location_prefix` (`Location/Address`, `Vicinity of`, `Location`, or null), `location_raw`, `raw_block` (every line of the entry, including `Refer To` and `Charges:` lines). All text is verbatim, with wrapped lines joined by a single space.
+- **documents** — `id` (WordPress media id, PK), `source_url`, `title`, `uploaded_at`, `modified_at` (both UTC), `sha256`, `fetched_at`, `first_date`, `last_date`, `status` (`loaded` / `out_of_scope` / `quarantined`), `error`.
+- **entry_versions** — PK (`call_number`, `document_id`); `page`, `date`, `time`, `call_type`, `result`, `location_prefix` (`Location/Address`, `Vicinity of`, `Location`, or null), `location_raw`, `raw_block` (every line of the entry, including `Refer To` and `Charges:` lines). All text is verbatim, with wrapped lines joined by a single space, or by nothing after a hyphen that ends a word.
 - **entries** — `call_number` (PK, e.g. `26-11102`), `current_document_id`, `status` (`current` / `withdrawn`).
 - **placements** — `call_number` (PK, current entries only), `kind` (`address`, `intersection`, `street_only`, `none`, `unplaced`), `address_display`, `lon`, `lat`, `streets` (JSON list), `wards` (JSON list), `method`, `reference_version`.
-- **runs** — `started_at`, `finished_at`, `documents_new`, `entries_new`, `quarantined`, `conflicts`, `versions_differing`, `withdrawn`, `new_call_types`, `dates_without_entries`, `placed_rate`.
+- **runs** — `id`, `command`, `started_at`, `finished_at`, then counts: `documents_new`, `entries_new`, `quarantined`, `conflicts` (call numbers printed twice in one log), `versions_differing`, `withdrawn`, `new_call_types`, `dates_without_entries`, `notices` (source damage loaded anyway); phase 2 adds `placed_rate`.
+
+The database records `PRAGMA user_version`; a database from another schema version is refused with a message to delete it and run `rebuild`.
+
+### Archive sidecars
+
+`data/melrose/raw/<media id>.json`: `media_id`, `source_url`, `title`, `uploaded_at`, `modified_at`, `sha256` (naming `<sha256>.pdf` beside it), `fetched_at`. One sidecar per upload, so the same PDF uploaded twice keeps both.
 
 ### Reference snapshots
 
