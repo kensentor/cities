@@ -2,14 +2,15 @@
 
 A map of where police in Melrose, MA make traffic stops, built from the department's published weekly dispatch logs. The design and technical specs are in [docs/specs/traffic-stops-map/](docs/specs/traffic-stops-map/).
 
-Phases 1 and 2 are built: collecting the logs, keeping each one as published, loading its entries into SQLite, and placing each entry on the map against an offline snapshot of MassGIS and MassDOT data. The map page (phase 3) is not built yet.
+Phases 1–3 are built: collecting the logs, keeping each one as published, loading its entries into SQLite, placing each entry against an offline snapshot of MassGIS and MassDOT data, exporting the stops and crashes the map may show, and the map page in `site/`.
 
 ## Setup
 
-Python 3.14 and [uv](https://docs.astral.sh/uv/).
+Python 3.14 and [uv](https://docs.astral.sh/uv/) for the collector; Node 22.12 or later for the map page.
 
 ```sh
 uv sync
+cd site && npm install
 ```
 
 ## Commands
@@ -21,13 +22,30 @@ Run each command from the repo root. Data goes to `data/melrose/` unless `CITIES
 | `uv run cities melrose collect [--since YYYY-MM-DD]` | Lists the logs uploaded since 2026-07-20, downloads any not seen before, keeps each PDF, loads its entries, and places them. Running it again with nothing new writes nothing. |
 | `uv run cities melrose rebuild` | Re-reads every archived PDF and derives everything again, placements included. Use it after a parser change, after `fetch-reference`, on a fresh clone, or after putting hand-downloaded PDFs in the archive. |
 | `uv run cities melrose sample [--n 20] [--seed S] [--type CALL TYPE …]` | Prints random placed entries with their published location, the address shown, the method and an OpenStreetMap link, to check by eye that each lies where its log says. The seed is printed, so a sample can be repeated. |
+| `uv run cities melrose export` | Writes the map page's data again from what is stored: after editing `categories.toml`, or once for a database built before phase 3, since a `collect` with nothing new writes nothing. `collect` (when it found something) and `rebuild` export too. It refuses, exiting 3, if the placements came from another reference snapshot: run `rebuild` after `fetch-reference`. |
 | `uv run cities melrose fetch-reference` | Replaces the snapshot of the MassGIS address points, MassDOT roads and MassGIS wards. If any layer comes back short, the old snapshot stays. |
 
-Exit codes: 0 success; 1 some logs were quarantined, though the rest loaded; 2 a network or HTTP failure, with nothing written; 3 a local storage failure.
+Exit codes: 0 success; 1 some logs were quarantined, though the rest loaded; 2 a network or HTTP failure, with nothing written; 3 a local storage failure, or stored data that cannot be exported as it is.
 
 After a `collect` that found new logs, commit the new files in `data/melrose/raw/`. Until then they exist only on this machine.
 
 The database records its schema version. A database from an older version is refused with a message to delete `data/melrose/db.sqlite` and run `rebuild`, which recreates everything from the committed archive and snapshot.
+
+## The map page
+
+`src/cities/melrose/categories.toml` decides which call types leave SQLite and how the map groups them: Stops, and Crashes (three call types). Every other call type is stored but never exported. The export goes to `site/public/data/melrose/` (git-ignored; `CITIES_SITE_DATA_DIR` overrides `site/public/data`): `entries.json`, whose shape is the technical spec's Appendix D, and `wards.geojson`.
+
+```sh
+cd site
+npm run dev        # serve the page at http://localhost:5173
+npm test           # vitest on src/aggregate.ts
+npm run typecheck
+npm run build      # site/dist, a static site including the export
+```
+
+The page loads the export once and does all filtering and counting in the browser, in `src/aggregate.ts`, which uses neither Leaflet nor the DOM. Markers and the "not on the map" counts follow every filter. The ward table and street ranking have their own categories, so the Show checkboxes don't apply to them; the date range applies to both of the ward table's columns, and the result filter to stops only (design R6).
+
+What the export may carry is decided in `core/publishing.py`: only current entries of the listed call types; any arrest result as "Arrest"; a result printed cut short as its one full form, where it has one; the address rebuilt from the house number and reference street, and only for an entry on the map. An entry outside Melrose counts toward no street.
 
 ## What a run reports
 
@@ -60,17 +78,19 @@ src/cities/cli.py                       `cities` command; dispatches to one hand
 src/cities/melrose/
   domain/                               stdlib types; vocabulary.py holds the known results
   ports/inbound.py, ports/outbound.py   the use cases, and what the core drives
-  core/                                 collect | rebuild | reference | sample, over loading, over placing, over rules | locations
+  core/                                 collect | rebuild | reference | sample | export, over loading | publishing, over placing, over rules | locations
   adapters/inbound/cli.py               argument parsing and the printed report
-  adapters/outbound/                    wordpress, pdf_reader + log_grammar, log_archive, sqlite_repo, arcgis, reference_files, gazetteer, clock
+  adapters/outbound/                    wordpress, pdf_reader + log_grammar, log_archive, sqlite_repo, arcgis, reference_files, gazetteer, json_publisher, clock
   stubs.py                              in-memory fakes of every outbound port
-  settings.py                           data paths, the start date, the reference layers, the rule 5 thresholds, call_types.txt
+  settings.py                           data paths, the start date, the reference layers, the rule 5 thresholds, call_types.txt, categories.toml
+  categories.toml                       which call types the map shows, grouped into categories
   composition.py                        the only place adapters are built
   handler.py                            `cities melrose` entry point
 data/melrose/raw/                       committed: each PDF as <sha256>.pdf, plus <media id>.json saying which upload it was
 data/melrose/reference/                 committed: one GeoJSON file per layer, plus manifest.json
 data/melrose/db.sqlite                  git-ignored; `rebuild` recreates it
 tests/melrose/                          pytest
+site/                                   the map page: src/{main,aggregate,types}.ts, tests/ (vitest)
 ```
 
 | Outbound port | Adapter |
@@ -82,6 +102,7 @@ tests/melrose/                          pytest
 | `ReferenceSource`: fetch reference layers | ArcGIS REST |
 | `ReferenceStore`: keep the reference snapshot | GeoJSON files in `data/melrose/reference/` |
 | `Gazetteer`: locate addresses and crossings, describe the wards around a point | the snapshot, with shapely and pyproj in metres (EPSG:26986) |
+| `MapPublisher`: publish what the page may show | `entries.json` and `wards.geojson` in `site/public/data/melrose/` |
 | `Clock` | the system clock |
 
 ## Checks
@@ -90,9 +111,10 @@ tests/melrose/                          pytest
 uv run pytest
 uv run pyright
 uv run lint-imports
+cd site && npm test && npm run typecheck
 ```
 
-The import contracts and the pyright settings are in `pyproject.toml`. pyright runs in `standard` mode, because only `standard` reports an adapter whose signature drifted from its port. Each contract was proven on 2026-10-07, and again after phase 2 extended them, by planting a violation it forbids and seeing exactly that contract report BROKEN. Repeat that after changing a contract.
+The import contracts and the pyright settings are in `pyproject.toml`. pyright runs in `standard` mode, because only `standard` reports an adapter whose signature drifted from its port. Each contract was proven on 2026-10-07, and again after phases 2 and 3 extended them, by planting a violation it forbids and seeing exactly that contract report BROKEN. Repeat that after changing a contract.
 
 These tests guard rules that would otherwise fail without any error:
 
@@ -110,3 +132,12 @@ These tests guard rules that would otherwise fail without any error:
 | A ward edge counts only for the street that runs along it | `test_placing.py::test_an_edge_no_street_runs_along_adds_no_ward`, `::test_boundary_rows_credit_only_the_street_that_runs_along_the_edge` |
 | A missing reference snapshot writes nothing | `test_use_cases.py::test_a_missing_reference_snapshot_writes_nothing` |
 | At least 95% of stops with a location to place are on the map (AC2) | `test_published_placements.py::test_ac2_at_least_95_percent_of_stops_with_an_address_or_intersection_are_placed` |
+| Only the listed call types of current entries are exported | `test_published_export.py::test_ac5_every_current_entry_of_a_listed_call_type_is_exported_and_nothing_else`, `test_publishing.py::test_only_listed_call_types_of_current_entries_leave` |
+| A misspelt call type in `categories.toml` is caught | `test_categories.py::test_every_listed_call_type_is_one_the_logs_use` |
+| No word of a published location reaches the export unless it names a street (AC10) | `test_published_export.py::test_ac10_the_pope_entries_show_only_their_address`, `::test_r10_no_word_of_any_published_location_reaches_the_export_unless_it_names_a_street` |
+| Arrest results never show sex or age | `test_publishing.py::test_arrests_collapse_and_a_cut_short_result_takes_its_one_full_form`, `test_published_export.py::test_no_arrest_result_carries_sex_or_age` |
+| An unmapped record carries no address, point or ward | `test_publishing.py::test_an_unmapped_record_carries_no_address_point_or_ward` |
+| A shown entry without a placement, or placed against another snapshot, stops the export | `test_publishing.py::test_a_shown_entry_without_a_placement_refuses_the_export`, `::test_placements_from_another_snapshot_refuse_the_export` |
+| The export file keeps the shape the page reads | `test_storage_adapters.py::test_the_export_file_has_exactly_the_appendix_d_shape`, `::test_the_export_file_matches_the_golden_file_the_page_tests_read`, and `site/tests/aggregate.test.ts` on the same golden file |
+| Collecting then rebuilding gives the same export, byte for byte apart from `generated_at` (AC11) | `test_cli_end_to_end.py::test_collect_then_collect_again_then_rebuild` |
+| Ward stops − extra counts + unmapped stops = total stops, under any filter (AC7) | `site/tests/aggregate.test.ts`, "AC7: the ward table reconciles" |

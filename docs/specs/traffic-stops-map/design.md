@@ -1,6 +1,6 @@
 # Melrose traffic stops map — design spec
 
-- **Status:** Approved by Ken Hoffmann, 2026-10-03. Amended with A1–A6 from the technical spec, approved by Ken Hoffmann, 2026-10-03, and with A7–A9, approved by Ken Hoffmann, 2026-10-07.
+- **Status:** Approved by Ken Hoffmann, 2026-10-03. Amended with A1–A6 from the technical spec, approved by Ken Hoffmann, 2026-10-03, with A7–A9, approved by Ken Hoffmann, 2026-10-07, and with A10–A11, approved by Ken Hoffmann, 2026-10-08.
 - **Date:** 2026-10-03
 - **Author:** Ken Hoffmann
 - **Ticket:** none
@@ -71,13 +71,13 @@ Nothing has been built yet. What was checked on 2026-10-03:
 | <a name="r3"></a>R3 | Must | G1, G3 | Place each entry whose location is an address or intersection at a point in Melrose. An entry whose location can't be placed, or that would land outside Melrose, is counted as unmapped rather than shown in the wrong place. An entry's location is its first location line, and only if it comes before the entry's ID, Refer To or Charges lines; any other location line is usually left by an entry the department withheld, and is kept in storage but never used (A8). |
 | <a name="r4"></a>R4 | Must | G1, G2 | Show a map of Melrose with markers for stops (MOTOR VEHICLE STOP) and crashes (MOTOR VEHICLE ACCIDENT, ACCIDENT HIT & RUN, MVA - Not Investigated), filtered by a date range and by category. |
 | <a name="r5"></a>R5 | Must | G3 | Show the 7 ward boundaries on the map and assign each mapped entry to a ward. An entry on a stretch of street that forms a ward boundary counts toward every ward that boundary separates: two, or three where boundaries meet. |
-| <a name="r6"></a>R6 | Must | G2, G3 | Show a per-ward table of stops, crashes and stops per crash for the current filters, with a note giving how many of them were counted in more than one ward and how many extra counts that adds. |
+| <a name="r6"></a>R6 | Must | G2, G3 | Show a per-ward table of stops, crashes and stops per crash for the current filters, with a note giving how many of them were counted in more than one ward and how many extra counts that adds. The date range applies to both columns and the result filter to stops only, since a crash's result says nothing about enforcement (A11). |
 | <a name="r7"></a>R7 | Must | G1 | Show streets ranked by number of stops for the current filters. The ranking includes stops that have a street but no address. An intersection stop counts toward both streets, and the ranking notes how many stops were counted twice this way. |
 | <a name="r8"></a>R8 | Must | G3, G4 | Next to the map, show how many entries in the current filter are not on the map, split into street only, no location, address not found, and outside Melrose (an entry whose location names another town, A9). |
 | <a name="r9"></a>R9 | Must | G4 | Selecting a marker shows its call number, date, time, call type, result (any arrest result shown as "Arrest") and address, with a link to the weekly log it came from. |
 | <a name="r10"></a>R10 | Must | G4 | Display only the address part of a location, never the name of a place or household. The original text stays in storage. |
 | <a name="r11"></a>R11 | Must | G3, G4 | Collecting a week that was already collected changes nothing: no duplicates and no changed counts. |
-| <a name="r12"></a>R12 | Should | G1 | Filter by result (e.g. Verbal Warning, Citation/Warning Issued). |
+| <a name="r12"></a>R12 | Should | G1 | Filter by result (e.g. Verbal Warning, Citation/Warning Issued). A result the log prints cut short is shown as its full form when only one known result completes it (`Citation/Warning` as Citation/Warning Issued), so the filter catches it; storage keeps the printed text (A10). |
 
 ## Acceptance criteria
 
