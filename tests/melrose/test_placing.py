@@ -115,18 +115,19 @@ def test_ac8_a_street_without_a_number_ranks_but_is_not_placed() -> None:
 
 
 @pytest.mark.parametrize(
-    ("location", "prefix", "method"),
+    ("location", "prefix", "kind", "method"),
     [
-        ("[MED] MEDFORD POLICE DEPT - 100 MAIN ST", "Location/Address", "another town (MED)"),
-        ("PETRONES", "Location", "named place without an address"),
-        ("9 NOWHERE LN", "Location/Address", "unknown street: NOWHERE LN"),
-        ("12 FRANKLIN ST", "Location/Address", "address not found"),
-        ("100 MAIN ST", "Location/Address", "300 m outside Melrose"),
+        ("[MED] MEDFORD POLICE DEPT - 100 MAIN ST", "Location/Address", PlacementKind.OUTSIDE, "another town (MED)"),
+        ("100 MAIN ST", "Location/Address", PlacementKind.OUTSIDE, "300 m outside Melrose"),
+        ("PETRONES", "Location", PlacementKind.UNPLACED, "named place without an address"),
+        ("9 NOWHERE LN", "Location/Address", PlacementKind.UNPLACED, "unknown street: NOWHERE LN"),
+        ("12 FRANKLIN ST", "Location/Address", PlacementKind.UNPLACED, "address not found"),
     ],
 )
-def test_what_cannot_be_placed_in_melrose_is_unplaced_with_its_reason(location: str, prefix: str, method: str) -> None:
+def test_what_cannot_be_placed_in_melrose_is_unmapped_with_its_reason(location: str, prefix: str, kind: PlacementKind, method: str) -> None:
+    """Another town or a point beyond the city is "outside Melrose" (A9); anything else is "address not found"."""
     p = placed(version("26-1", location, prefix))["26-1"]
-    assert (p.kind, p.method, p.point, p.address_display, p.wards) == (PlacementKind.UNPLACED, method, None, None, ())
+    assert (p.kind, p.method, p.point, p.address_display, p.wards) == (kind, method, None, None, ())
 
 
 def test_an_unknown_street_is_never_displayed() -> None:
@@ -143,13 +144,15 @@ def test_ac2_rate_counts_stops_whose_location_gives_something_to_place() -> None
             version("26-4", "FRANKLIN ST"),  # street only: not in the rate
             version("26-5", None),  # no location: not in the rate
             version("26-6", "744 LYNN FELLS PKWY", call_type="MEDICAL EMERGENCY"),  # not a stop
+            version("26-7", "[MED] 100 MAIN ST"),  # another town: counts against the rate
         ],
         gazetteer(),
     )
-    versions = [version("26-6", "x", call_type="MEDICAL EMERGENCY")] + [version(f"26-{n}", "x") for n in range(1, 6)]
+    versions = [version("26-6", "x", call_type="MEDICAL EMERGENCY")] + [version(f"26-{n}", "x") for n in (1, 2, 3, 4, 5, 7)]
     summary = summarise(placements, versions)
     assert summary is not None
-    assert (summary.stops_placed, summary.stops_placeable) == (1, 3)
+    assert (summary.stops_placed, summary.stops_placeable) == (1, 4)
+    assert [call for call, _ in summary.unplaced_stops] == ["26-2", "26-3", "26-7"]
 
 
 def test_boundary_rows_credit_only_the_street_that_runs_along_the_edge() -> None:

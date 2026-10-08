@@ -55,7 +55,7 @@ def place(v: EntryVersion, gazetteer: Gazetteer, reference_streets: frozenset[st
         case LocationForm.PLACE:
             return result(PlacementKind.UNPLACED, "named place without an address")
         case LocationForm.OTHER_TOWN:
-            return result(PlacementKind.UNPLACED, f"another town ({parsed.town})")
+            return result(PlacementKind.OUTSIDE, f"another town ({parsed.town})")
     matched = [match_street(p.street, reference_streets) for p in parsed.parts]
     unknown = [p.street for p, m in zip(parsed.parts, matched, strict=True) if m is None]
     if unknown:
@@ -74,7 +74,7 @@ def place(v: EntryVersion, gazetteer: Gazetteer, reference_streets: frozenset[st
         return result(PlacementKind.UNPLACED, located.method, streets=ranking)
     outside = gazetteer.distance_outside_city_m(located.point)
     if outside > OUTSIDE_CITY_LIMIT_M:
-        return result(PlacementKind.UNPLACED, f"{outside:.0f} m outside Melrose", streets=ranking)
+        return result(PlacementKind.OUTSIDE, f"{outside:.0f} m outside Melrose", streets=ranking)
     surroundings = gazetteer.wards_around(located.point, names)
     wards = {w for edge in surroundings.near_edges if edge.along is not None for w in edge.wards}
     if surroundings.ward is not None:
@@ -113,7 +113,7 @@ def summarise(placements: Sequence[Placement], versions: Sequence[EntryVersion])
         counts=tuple(sorted(Counter(p.kind.value for p in placements).items())),
         stops_placeable=len(stops),
         stops_placed=len(placed),
-        unplaced_stops=tuple((p.call_number, p.method) for p in stops if p.kind is PlacementKind.UNPLACED),
+        unplaced_stops=tuple((p.call_number, p.method) for p in stops if p not in placed),
         unknown_streets=tuple(sorted(unknown.items(), key=lambda kv: (-kv[1], kv[0]))),
         boundary=_boundary_rows(placements),
     )

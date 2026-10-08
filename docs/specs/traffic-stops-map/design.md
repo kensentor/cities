@@ -1,6 +1,6 @@
 # Melrose traffic stops map — design spec
 
-- **Status:** Approved by Ken Hoffmann, 2026-10-03. Amended with A1–A6 from the technical spec, approved by Ken Hoffmann, 2026-10-03, and with A7–A8, approved by Ken Hoffmann, 2026-10-07.
+- **Status:** Approved by Ken Hoffmann, 2026-10-03. Amended with A1–A6 from the technical spec, approved by Ken Hoffmann, 2026-10-03, and with A7–A9, approved by Ken Hoffmann, 2026-10-07.
 - **Date:** 2026-10-03
 - **Author:** Ken Hoffmann
 - **Ticket:** none
@@ -73,7 +73,7 @@ Nothing has been built yet. What was checked on 2026-10-03:
 | <a name="r5"></a>R5 | Must | G3 | Show the 7 ward boundaries on the map and assign each mapped entry to a ward. An entry on a stretch of street that forms a ward boundary counts toward every ward that boundary separates: two, or three where boundaries meet. |
 | <a name="r6"></a>R6 | Must | G2, G3 | Show a per-ward table of stops, crashes and stops per crash for the current filters, with a note giving how many of them were counted in more than one ward and how many extra counts that adds. |
 | <a name="r7"></a>R7 | Must | G1 | Show streets ranked by number of stops for the current filters. The ranking includes stops that have a street but no address. An intersection stop counts toward both streets, and the ranking notes how many stops were counted twice this way. |
-| <a name="r8"></a>R8 | Must | G3, G4 | Next to the map, show how many entries in the current filter are not on the map, split into street only, no location, and address not found. |
+| <a name="r8"></a>R8 | Must | G3, G4 | Next to the map, show how many entries in the current filter are not on the map, split into street only, no location, address not found, and outside Melrose (an entry whose location names another town, A9). |
 | <a name="r9"></a>R9 | Must | G4 | Selecting a marker shows its call number, date, time, call type, result (any arrest result shown as "Arrest") and address, with a link to the weekly log it came from. |
 | <a name="r10"></a>R10 | Must | G4 | Display only the address part of a location, never the name of a place or household. The original text stays in storage. |
 | <a name="r11"></a>R11 | Must | G3, G4 | Collecting a week that was already collected changes nothing: no duplicates and no changed counts. |

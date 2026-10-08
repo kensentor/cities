@@ -67,7 +67,7 @@ def test_ac8a_franklin_at_garden_counts_toward_both_streets(built) -> None:
 
 def test_another_towns_address_is_never_placed_in_melrose(built) -> None:
     p = placement(built, "26-10277")  # [WAK] UNION ST
-    assert (p.kind, p.method) == (PlacementKind.UNPLACED, "another town (WAK)")
+    assert (p.kind, p.method, p.point) == (PlacementKind.OUTSIDE, "another town (WAK)", None)
 
 
 def test_r10_every_word_shown_is_a_house_number_an_at_sign_or_part_of_a_reference_street(built) -> None:

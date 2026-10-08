@@ -49,7 +49,7 @@ Every run also reports placement against the reference snapshot:
 - **Unknown streets**: names that match no street in the snapshot. They are never displayed.
 - **Boundary streets** (on `rebuild`, and on a `collect` that wrote): for each street near a shared ward edge, how many placed entries were within reach of the edge and how many rule 5 counted toward both wards. Check these against the [city ward map](https://www.cityofmelrose.org/745/City-of-Melrose-Ward-and-Precinct-Map). The rule's thresholds are `BOUNDARY_RULE` in `settings.py`.
 
-An entry is left unplaced, and counted as unmapped, when its location names another town (`[MED] …`), is a named place with no address (`Location: PETRONES`), names an unknown street, cannot be found, or would land more than 25 m outside Melrose.
+An entry is not put on the map, and is counted as unmapped, in one of four groups (design R8): **street only**; **no location**; **address not found**, when its location is a named place with no address (`Location: PETRONES`), names an unknown street, or cannot be found; and **outside Melrose**, when it names another town (`[MED] …`) or would land more than 25 m outside the city.
 
 ## Layout
 

@@ -31,13 +31,15 @@ class LocationForm(StrEnum):
 
 
 class PlacementKind(StrEnum):
-    """What the map does with the entry (technical spec, Data model)."""
+    """What the map does with the entry (technical spec, Data model). The last four are the unmapped
+    groups of design R8."""
 
     ADDRESS = "address"
     INTERSECTION = "intersection"
     STREET_ONLY = "street_only"
     NONE = "none"
-    UNPLACED = "unplaced"
+    UNPLACED = "unplaced"  # "address not found": a location in Melrose that could not be put on the map
+    OUTSIDE = "outside"  # "outside Melrose": another town's label, or a point beyond the city lines (A9)
 
 
 @dataclass(frozen=True, slots=True)
