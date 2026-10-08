@@ -128,8 +128,8 @@ async function main(): Promise<void> {
     return row;
   }
 
-  // The Stops box shows or hides the stop layer. The results beneath it are a separate filter that
-  // also drives the ward table and ranking, so unticking Stops leaves them as they are (A11, A13).
+  // Unticking Stops removes stops from the map and tables whatever results are ticked, so its result
+  // boxes are disabled meanwhile but keep their state for when Stops is ticked again (A14).
   const categoryBoxes = byId("categories");
   const checked = new Set(exported.categories.map((c) => c.key));
   const stopResults = new Set(stopResultOptions(exported.records));
@@ -140,7 +140,10 @@ async function main(): Promise<void> {
     row.insertBefore(swatch, row.lastChild);
     categoryBoxes.append(row);
     if (c.key === STOPS) {
-      const results = el("div", undefined, "subchecks");
+      const results = el("fieldset", undefined, "subchecks");
+      row.querySelector("input")?.addEventListener("change", () => {
+        results.disabled = !checked.has(STOPS);
+      });
       results.setAttribute("role", "group");
       results.setAttribute("aria-label", "Stop results");
       for (const option of stopResults) results.append(checkbox(option, stopResults, option, "check"));
@@ -230,7 +233,7 @@ async function main(): Promise<void> {
       `${w.stopsMultiWard.entries} stops sit on a ward boundary and count toward more than one ward, adding ` +
       `${w.stopsMultiWard.extra} extra counts (crashes: ${w.crashesMultiWard.entries}, adding ${w.crashesMultiWard.extra}). ` +
       `${wardStops} ward counts − ${w.stopsMultiWard.extra} extra + ${w.unmappedStops} stops not on the map = ` +
-      `${w.totalStops} stops. The date range applies to both columns; the results ticked under Stops to stops only.`;
+      `${w.totalStops} stops. The date range and Show boxes apply to both columns; the results ticked under Stops to stops only.`;
 
     const ranking = streetRanking(exported.records, f);
     const rankTable = byId<HTMLTableElement>("ranking");
@@ -244,7 +247,7 @@ async function main(): Promise<void> {
     }
     byId("ranking-note").textContent =
       `${ranking.countedTwice} intersection stops count toward both streets. ` +
-      `Includes stops with a street but no address. Follows the date range and the results ticked under Stops.`;
+      `Includes stops with a street but no address. Follows the date range, the Stops box and the results ticked under it.`;
   }
 
   render();

@@ -98,7 +98,7 @@ export interface WardRow {
   ward: string;
   stops: number;
   crashes: number;
-  stopsPerCrash: number | null; // null when the ward has no crashes, shown as "—"
+  stopsPerCrash: number | null; // null when the ward has no crashes or Stops is unticked, shown as "—"
 }
 
 export interface WardTable {
@@ -111,19 +111,19 @@ export interface WardTable {
 }
 
 /**
- * Stops and crashes per ward (design R6). The table has a column per category, so the category
- * checkboxes do not apply to it. The date range applies to both columns and the ticked stop results
- * to stops only: a crash's result says nothing about enforcement (A11, A13).
+ * Stops and crashes per ward (design R6). The date range applies to both columns, an unticked Show box
+ * empties its column, and the ticked stop results apply to stops only: a crash's result says nothing
+ * about enforcement (A11, A13, A14).
  */
 export function wardTable(records: readonly ExportRecord[], f: Filters): WardTable {
   const stops = rankedStops(records, f);
-  const crashes = records.filter((r) => r.category === CRASHES && inDates(r, f));
+  const crashes = records.filter((r) => r.category === CRASHES && f.categories.has(CRASHES) && inDates(r, f));
   const stopsByWard = countBy(stops, (r) => r.wards);
   const crashesByWard = countBy(crashes, (r) => r.wards);
   const rows = WARDS.map((ward) => {
     const s = stopsByWard.get(ward) ?? 0;
     const c = crashesByWard.get(ward) ?? 0;
-    return { ward, stops: s, crashes: c, stopsPerCrash: c === 0 ? null : s / c };
+    return { ward, stops: s, crashes: c, stopsPerCrash: c === 0 || !f.categories.has(STOPS) ? null : s / c };
   });
   return {
     rows,
@@ -146,9 +146,9 @@ export interface StreetRanking {
 }
 
 /**
- * Streets by number of stops (design R7), under the date range and ticked stop results; like the ward table it
- * has its own category, so the checkboxes do not apply. Stops with a street but no address count too
- * (AC8), and an intersection stop counts toward both its streets (AC8a).
+ * Streets by number of stops (design R7), under the date range, the Stops box and the ticked stop
+ * results. Stops with a street but no address count too (AC8), and an intersection stop counts toward
+ * both its streets (AC8a).
  */
 export function streetRanking(records: readonly ExportRecord[], f: Filters): StreetRanking {
   const stops = rankedStops(records, f);
@@ -164,7 +164,7 @@ export function streetRanking(records: readonly ExportRecord[], f: Filters): Str
 }
 
 function rankedStops(records: readonly ExportRecord[], f: Filters): ExportRecord[] {
-  return records.filter((r) => r.category === STOPS && inDates(r, f) && hasResult(r, f));
+  return records.filter((r) => r.category === STOPS && f.categories.has(STOPS) && inDates(r, f) && hasResult(r, f));
 }
 
 /**

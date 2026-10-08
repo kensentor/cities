@@ -144,7 +144,8 @@ describe("AC7: the ward table reconciles", () => {
     ["one stop result", { ...all, stopResults: only("Citation/Warning Issued") }],
     ["two stop results", { ...all, stopResults: only("Citation/Warning Issued", "Arrest") }],
     ["no stop results", { ...all, stopResults: only() }],
-    ["Stops unchecked", { ...all, categories: new Set([CRASHES]) }],
+    ["Stops unticked", { ...all, categories: new Set([CRASHES]) }],
+    ["Crashes unticked", { ...all, categories: new Set([STOPS]) }],
     ["nothing in range", { ...all, from: "2026-01-01", to: "2026-01-02" }],
   ];
   it.each(filters)("ward stops − extra counts + unmapped stops = total stops, with %s", (_, f) => {
@@ -166,8 +167,14 @@ describe("AC7: the ward table reconciles", () => {
     expect(formatPerCrash(ward6?.stopsPerCrash ?? null)).toBe("—");
   });
 
-  it("is not emptied by unchecking a category", () => {
-    expect(wardTable(RECORDS, { ...all, categories: new Set() })).toEqual(wardTable(RECORDS, all));
+  it("counts no stops with Stops unticked, and no crashes with Crashes unticked (A14)", () => {
+    const noStops = wardTable(RECORDS, { ...all, categories: new Set([CRASHES]) });
+    expect(noStops.rows.map((row) => row.stops)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(noStops.totalStops).toBe(0);
+    expect(noStops.rows.find((row) => row.ward === "4")).toEqual({ ward: "4", stops: 0, crashes: 2, stopsPerCrash: null });
+    const noCrashes = wardTable(RECORDS, { ...all, categories: new Set([STOPS]) });
+    expect(noCrashes.rows.map((row) => row.crashes)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(noCrashes.rows.find((row) => row.ward === "4")?.stops).toBe(3);
   });
 });
 
@@ -236,11 +243,11 @@ describe("AC12: the stop results ticked under Stops", () => {
     expect(streetRanking(RECORDS, f).rows).toEqual([]);
   });
 
-  it("still drive the ward table and ranking when Stops is unticked (A11)", () => {
-    const f: Filters = { ...all, stopResults: only("Citation/Warning Issued") };
-    const noStops: Filters = { ...f, categories: new Set([CRASHES]) };
-    expect(wardTable(RECORDS, noStops)).toEqual(wardTable(RECORDS, f));
-    expect(streetRanking(RECORDS, noStops)).toEqual(streetRanking(RECORDS, f));
+  it("count for nothing when Stops is unticked: no stops anywhere (A14)", () => {
+    const noStops: Filters = { ...all, categories: new Set([CRASHES]), stopResults: only("Citation/Warning Issued") };
+    expect(filterRecords(RECORDS, noStops).every((r) => r.category === CRASHES)).toBe(true);
+    expect(wardTable(RECORDS, noStops).totalStops).toBe(0);
+    expect(streetRanking(RECORDS, noStops).rows).toEqual([]);
   });
 
   it("are offered from stops only, most frequent first", () => {
