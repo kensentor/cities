@@ -53,6 +53,14 @@ export function stopResultOptions(records: readonly ExportRecord[]): string[] {
   return [...counts.keys()].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0) || a.localeCompare(b));
 }
 
+/**
+ * Stops per result in the date range, shown beside each result box (design R12). The ticks, including
+ * the Stops box, do not change it, so a count reads the same ticked or not (A15).
+ */
+export function stopResultCounts(records: readonly ExportRecord[], f: Filters): Map<string, number> {
+  return countBy(records.filter((r) => r.category === STOPS && inDates(r, f)), (r) => [r.result]);
+}
+
 export interface Tally {
   total: number;
   mapped: number; // entries with a marker, not distinct markers (design AC4)

@@ -10,6 +10,7 @@ import {
   filterRecords,
   formatPerCrash,
   markerGroups,
+  stopResultCounts,
   stopResultOptions,
   streetRanking,
   tally,
@@ -248,6 +249,14 @@ describe("AC12: the stop results ticked under Stops", () => {
     expect(filterRecords(RECORDS, noStops).every((r) => r.category === CRASHES)).toBe(true);
     expect(wardTable(RECORDS, noStops).totalStops).toBe(0);
     expect(streetRanking(RECORDS, noStops).rows).toEqual([]);
+  });
+
+  it("each show their stops in the date range, ticked or not (A15)", () => {
+    const counts = (f: Filters) => Object.fromEntries(stopResultCounts(RECORDS, f));
+    expect(counts(all)).toEqual({ "Verbal Warning": 5, "Citation/Warning Issued": 2, Arrest: 1 });
+    expect(counts(week)).toEqual({ "Verbal Warning": 4, "Citation/Warning Issued": 2, Arrest: 1 });
+    const unticked: Filters = { ...week, categories: new Set([CRASHES]), stopResults: only() };
+    expect(counts(unticked)).toEqual(counts(week));
   });
 
   it("are offered from stops only, most frequent first", () => {

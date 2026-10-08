@@ -15,6 +15,7 @@ import {
   filterRecords,
   formatPerCrash,
   markerGroups,
+  stopResultCounts,
   stopResultOptions,
   streetRanking,
   tally,
@@ -133,6 +134,7 @@ async function main(): Promise<void> {
   const categoryBoxes = byId("categories");
   const checked = new Set(exported.categories.map((c) => c.key));
   const stopResults = new Set(stopResultOptions(exported.records));
+  const resultCounts = new Map<string, HTMLSpanElement>();
   for (const c of exported.categories) {
     const row = checkbox(c.label, checked, c.key, "check");
     const swatch = el("span", undefined, "swatch");
@@ -146,7 +148,13 @@ async function main(): Promise<void> {
       });
       results.setAttribute("role", "group");
       results.setAttribute("aria-label", "Stop results");
-      for (const option of stopResults) results.append(checkbox(option, stopResults, option, "check"));
+      for (const option of stopResults) {
+        const row = checkbox(option, stopResults, option, "check");
+        const count = el("span", undefined, "count");
+        resultCounts.set(option, count);
+        row.append(count);
+        results.append(row);
+      }
       categoryBoxes.append(results);
     }
   }
@@ -176,6 +184,9 @@ async function main(): Promise<void> {
     if (rangeError !== null) return;
     const f = filters();
     const shown = filterRecords(exported.records, f);
+
+    const counts = stopResultCounts(exported.records, f);
+    for (const [option, count] of resultCounts) count.textContent = String(counts.get(option) ?? 0);
 
     markers.clearLayers();
     for (const group of markerGroups(shown)) {
