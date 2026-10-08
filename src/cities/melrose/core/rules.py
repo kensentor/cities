@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -21,6 +22,8 @@ from cities.melrose.domain.reports import Notice, NoticeKind
 from cities.melrose.domain.vocabulary import ARREST_RESULT, KNOWN_RESULTS, TRUNCATED_RESULTS
 
 _LISTED_RESULTS = sorted(KNOWN_RESULTS | TRUNCATED_RESULTS, key=len, reverse=True)
+# A reference such as "26-9817-OF" or "26-8468-A-OF" names the call it was filed under.
+_REFERENCED_CALL = re.compile(r"^(\d{2}-\d+)-")
 # Segments after which a location line no longer belongs to the entry.
 _CLOSING_KINDS = frozenset({SegmentKind.ID, SegmentKind.REFER, SegmentKind.CHARGES})
 
@@ -69,27 +72,36 @@ def assign_dates(entries: Sequence[RawEntry], declared_from: date | None) -> lis
 class Interpreted:
     versions: list[EntryVersion]
     notices: list[Notice]
+    # Call numbers taken from an entry's own Refer To line because the page does not print them.
+    inferred: frozenset[str] = frozenset()
 
 
 def interpret(entries: Sequence[RawEntry], dates: Sequence[date], media_id: int) -> Interpreted:
     """Turn observed entries into versions. Raises DocumentRejected for a header it cannot split."""
     versions: list[EntryVersion] = []
     notices: list[Notice] = []
+    inferred: set[str] = set()
+    printed = {e.call_number for e in entries if e.call_number is not None}
     for raw, day in zip(entries, dates, strict=True):
         block = "\n".join(raw.lines)
-        if raw.call_number is None:
-            notices.append(Notice(media_id, None, NoticeKind.UNNUMBERED_ENTRY, block))
-            continue
+        call_number = raw.call_number
+        if call_number is None:
+            call_number = _referenced_call(raw)
+            if call_number is None or call_number in printed or call_number in inferred:
+                notices.append(Notice(media_id, None, NoticeKind.UNNUMBERED_ENTRY, block))
+                continue
+            inferred.add(call_number)
+            notices.append(Notice(media_id, call_number, NoticeKind.INFERRED_CALL_NUMBER, block))
         header, spare = _split_longest(raw.header_lines)
         if header is None:
-            raise DocumentRejected(f"unknown result in {raw.call_number}: {join_wrapped(raw.header_lines)!r}")
-        notices.extend(Notice(media_id, raw.call_number, NoticeKind.LEFTOVER_LINE, line) for line in spare)
+            raise DocumentRejected(f"unknown result in {call_number}: {join_wrapped(raw.header_lines)!r}")
+        notices.extend(Notice(media_id, call_number, NoticeKind.LEFTOVER_LINE, line) for line in spare)
         if header.truncated:
-            notices.append(Notice(media_id, raw.call_number, NoticeKind.TRUNCATED_RESULT, header.result))
-        prefix, location = _location(raw, media_id, notices)
+            notices.append(Notice(media_id, call_number, NoticeKind.TRUNCATED_RESULT, header.result))
+        prefix, location = _location(raw, call_number, media_id, notices)
         versions.append(
             EntryVersion(
-                call_number=raw.call_number,
+                call_number=call_number,
                 document_id=media_id,
                 page=raw.page,
                 date=day,
@@ -101,7 +113,18 @@ def interpret(entries: Sequence[RawEntry], dates: Sequence[date], media_id: int)
                 raw_block=block,
             )
         )
-    return Interpreted(versions, notices)
+    return Interpreted(versions, notices, frozenset(inferred))
+
+
+def _referenced_call(raw: RawEntry) -> str | None:
+    """The call number named by an unnumbered entry's own first Refer To line (design A7).
+
+    Not used when it names a call printed elsewhere in the same log: the line then belongs to
+    that call, not to this entry.
+    """
+    reference = next((s.text for s in raw.segments if s.kind is SegmentKind.REFER), None)
+    match = _REFERENCED_CALL.match(reference) if reference else None
+    return match.group(1) if match else None
 
 
 def _split_longest(lines: Sequence[str]) -> tuple[Header | None, Sequence[str]]:
@@ -116,7 +139,7 @@ def _split_longest(lines: Sequence[str]) -> tuple[Header | None, Sequence[str]]:
     return None, ()
 
 
-def _location(raw: RawEntry, media_id: int, notices: list[Notice]) -> tuple[str | None, str | None]:
+def _location(raw: RawEntry, call_number: str, media_id: int, notices: list[Notice]) -> tuple[str | None, str | None]:
     """The entry's own location: its first location line, if no ID, Refer To or Charges line precedes it.
 
     Any other location line is reported and kept only in the raw block. Such lines are usually
@@ -131,22 +154,26 @@ def _location(raw: RawEntry, media_id: int, notices: list[Notice]) -> tuple[str 
             if found == (None, None) and not closed:
                 found = (segment.kind.value, segment.text)
             else:
-                notices.append(Notice(media_id, raw.call_number, NoticeKind.TRAILING_LOCATION, segment.text))
+                notices.append(Notice(media_id, call_number, NoticeKind.TRAILING_LOCATION, segment.text))
         elif segment.kind is SegmentKind.LEFTOVER:
-            notices.append(Notice(media_id, raw.call_number, NoticeKind.LEFTOVER_LINE, segment.text))
+            notices.append(Notice(media_id, call_number, NoticeKind.LEFTOVER_LINE, segment.text))
     return found
 
 
-def check_complete(versions: Sequence[EntryVersion], call_numbers_in_text: int) -> None:
-    """Every call number printed in the log must have become exactly one version."""
+def check_complete(versions: Sequence[EntryVersion], call_numbers_in_text: int, inferred: Collection[str] = ()) -> None:
+    """Every call number printed in the log must have become exactly one version.
+
+    Inferred call numbers are not printed as call numbers, so they are not in the text's count.
+    """
     counts: dict[str, int] = defaultdict(int)
     for v in versions:
         counts[v.call_number] += 1
     duplicates = sorted(c for c, n in counts.items() if n > 1)
     if duplicates:
         raise DocumentRejected(f"call numbers printed more than once: {', '.join(duplicates)}")
-    if len(versions) != call_numbers_in_text:
-        raise DocumentRejected(f"read {len(versions)} entries but the text holds {call_numbers_in_text} call numbers")
+    printed = len(versions) - len(inferred)
+    if printed != call_numbers_in_text:
+        raise DocumentRejected(f"read {printed} entries but the text holds {call_numbers_in_text} call numbers")
 
 
 def current_entries(documents: Iterable[DocumentRecord], versions: Iterable[EntryVersion]) -> list[EntryState]:

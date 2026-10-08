@@ -43,7 +43,7 @@ def run(tmp_path: Path, *argv: str, transport: httpx.BaseTransport | None = None
 def test_collect_then_collect_again_then_rebuild(tmp_path: Path) -> None:
     code, out = run(tmp_path, "collect", transport=site())
     assert code == cli.EXIT_OK, out
-    assert "Documents: 11   new entries: 1958" in out
+    assert "Documents: 11   new entries: 1959" in out
     assert "442380 out_of_scope" in out
     assert len(list((tmp_path / "melrose" / "raw").glob("*.json"))) == 11
 

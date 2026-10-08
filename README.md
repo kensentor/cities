@@ -32,7 +32,8 @@ A quarantined log printed the reason it could not be loaded, such as an unknown 
 
 Some damage in the published logs cannot be fixed by a parser, so it is loaded anyway and reported as a notice:
 
-- **unnumbered entry**: a line with a time and a call type but no call number. It has no key to store it under, so it is reported and not stored.
+- **inferred call number**: an entry printed without its call number, stored under the call its own `Refer To` line names. Its `raw_block` holds that line.
+- **unnumbered entry**: an entry printed without its call number and with no `Refer To` line to take one from, or one naming a call printed elsewhere in the log. It has no key to store it under, so it is reported and not stored.
 - **trailing location**: a location line after an entry's first location, or after its `ID:`, `Refer To` or `Charges:` lines. It is usually left behind when the department withholds the entry that owned it. It stays in `raw_block` and never becomes the entry's location.
 - **leftover line**: a line that continues nothing, such as `:` or the tail of a removed line.
 - **truncated result**: a result printed cut short, such as "Taken/Referred to Other", stored as printed.

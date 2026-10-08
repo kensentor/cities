@@ -34,7 +34,7 @@ def load_document(archived: ArchivedLog, pdf: bytes, reader: LogReader, since: d
         dates = rules.assign_dates(read.entries, read.declared_from)
         first_date, last_date = min(dates), max(dates)
         interpreted = rules.interpret(read.entries, dates, media_id)
-        rules.check_complete(interpreted.versions, read.call_numbers_in_text)
+        rules.check_complete(interpreted.versions, read.call_numbers_in_text, interpreted.inferred)
     except rules.DocumentRejected as exc:
         conflicts = _duplicates(read.entries)
         record = DocumentRecord(archived, first_date, last_date, DocumentStatus.QUARANTINED, str(exc))

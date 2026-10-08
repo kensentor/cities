@@ -12,8 +12,11 @@ from cities.melrose.domain.logs import DocumentRecord
 class NoticeKind(StrEnum):
     """Damage in a published log that loads anyway, because no parser change could repair it."""
 
-    # A line with a time and a call type but no call number: there is no key to store it under.
+    # A line with a time and a call type but no call number, and no Refer To line of its own to take
+    # one from: there is no key to store it under.
     UNNUMBERED_ENTRY = "unnumbered entry"
+    # An entry printed without a call number, stored under the call its own Refer To line names.
+    INFERRED_CALL_NUMBER = "inferred call number"
     # A location line after the entry's first location or after its ID / Refer To / Charges lines,
     # usually left behind when the department withheld the entry that owned it. Never displayed.
     TRAILING_LOCATION = "trailing location"

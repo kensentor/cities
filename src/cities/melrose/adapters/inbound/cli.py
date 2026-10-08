@@ -87,7 +87,12 @@ def _print_run(report: RunReport, out: TextIO) -> int:
         counts = Counter(n.kind for n in report.notices)
         line("Source damage, loaded anyway: " + ", ".join(f"{counts[k]} {k.value}" for k in NoticeKind if counts[k]))
         for notice in report.notices:
-            if notice.kind in (NoticeKind.UNNUMBERED_ENTRY, NoticeKind.TRAILING_LOCATION, NoticeKind.STRAY_LINE):
+            if notice.kind in (
+                NoticeKind.UNNUMBERED_ENTRY,
+                NoticeKind.INFERRED_CALL_NUMBER,
+                NoticeKind.TRAILING_LOCATION,
+                NoticeKind.STRAY_LINE,
+            ):
                 first_line = notice.text.splitlines()[0] if notice.text else ""
                 line(f"  {notice.media_id} {notice.call_number or '(no call number)'} {notice.kind.value}: {first_line}")
     return EXIT_QUARANTINED if report.quarantined else EXIT_OK

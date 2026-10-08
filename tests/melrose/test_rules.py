@@ -98,10 +98,31 @@ def test_second_location_line_is_trailing_even_before_an_id_line() -> None:
     assert [n.text for n in out.notices] == ["B ST"]
 
 
-def test_an_entry_without_a_call_number_is_reported_not_stored() -> None:
+def test_an_entry_without_a_call_number_or_a_refer_to_is_reported_not_stored() -> None:
     out = rules.interpret([entry("26-1", DAY), entry(None, DAY, "Well Being Check * Report taken")], [DAY, DAY], 1)
     assert [v.call_number for v in out.versions] == ["26-1"]
     assert [n.kind for n in out.notices] == [NoticeKind.UNNUMBERED_ENTRY]
+
+
+def test_an_entry_without_a_call_number_takes_the_one_its_refer_to_names() -> None:
+    unnumbered = entry(None, DAY, "Well Being Check * Report taken", (SegmentKind.REFER, "26-9817-OF"), time="1559")
+    out = rules.interpret([entry("26-9816", DAY), unnumbered], [DAY, DAY], 1)
+    assert [v.call_number for v in out.versions] == ["26-9816", "26-9817"]
+    assert out.inferred == frozenset({"26-9817"})
+    assert [n.kind for n in out.notices] == [NoticeKind.INFERRED_CALL_NUMBER]
+    rules.check_complete(out.versions, call_numbers_in_text=1, inferred=out.inferred)
+
+
+def test_a_refer_to_naming_a_call_printed_in_the_same_log_is_not_used() -> None:
+    unnumbered = entry(None, DAY, "Well Being Check * Report taken", (SegmentKind.REFER, "26-9816-OF"))
+    out = rules.interpret([entry("26-9816", DAY), unnumbered], [DAY, DAY], 1)
+    assert [v.call_number for v in out.versions] == ["26-9816"]
+    assert [n.kind for n in out.notices] == [NoticeKind.UNNUMBERED_ENTRY]
+
+
+def test_a_lettered_reference_names_its_base_call() -> None:
+    unnumbered = entry(None, DAY, "Well Being Check * Report taken", (SegmentKind.REFER, "26-8468-A-OF"))
+    assert rules.interpret([unnumbered], [DAY], 1).versions[0].call_number == "26-8468"
 
 
 def test_completeness_rejects_a_count_mismatch_and_duplicates() -> None:

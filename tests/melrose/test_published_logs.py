@@ -84,10 +84,17 @@ def test_a_second_location_from_a_withheld_entry_is_not_this_entrys() -> None:
     assert ("26-9896", "473 LEBANON ST") in notices(document, NoticeKind.TRAILING_LOCATION)
 
 
-def test_entries_whose_call_number_is_missing_are_reported_not_stored() -> None:
-    aug_17 = notices(load(AUG_17), NoticeKind.UNNUMBERED_ENTRY)
+def test_an_entry_printed_without_a_call_number_is_stored_under_its_own_refer_to() -> None:
+    document = load(AUG_17)
+    v = version(document, "26-9817")
+    assert (v.time, v.call_type, v.result, v.location_raw) == ("1559", "Well Being Check", "* Report taken", "49 CONRAD RD")
+    assert "Refer To Incident: 26-9817-OF" in v.raw_block
+    assert [c for c, _ in notices(document, NoticeKind.INFERRED_CALL_NUMBER)] == ["26-9817"]
+    assert len(document.versions) == 187
+
+
+def test_an_entry_without_a_call_number_or_a_refer_to_is_reported_not_stored() -> None:
     jul_20 = notices(load(JUL_20), NoticeKind.UNNUMBERED_ENTRY)
-    assert [text.splitlines()[0] for _, text in aug_17] == ["1559 Well Being Check * Report taken"]
     assert [text.splitlines()[0] for _, text in jul_20] == ["0913 Animal Complaint Unit Clear"]
 
 
