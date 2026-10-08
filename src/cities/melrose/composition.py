@@ -10,6 +10,7 @@ import httpx
 
 from cities.melrose.adapters.outbound.arcgis import ArcGisReferenceSource
 from cities.melrose.adapters.outbound.clock import SystemClock
+from cities.melrose.adapters.outbound.gazetteer import SnapshotGazetteer
 from cities.melrose.adapters.outbound.log_archive import FileLogArchive
 from cities.melrose.adapters.outbound.pdf_reader import PdfLogReader
 from cities.melrose.adapters.outbound.reference_files import GeoJsonReferenceStore
@@ -18,7 +19,8 @@ from cities.melrose.adapters.outbound.wordpress import WordPressLogSource
 from cities.melrose.core.collect import CollectService
 from cities.melrose.core.rebuild import RebuildService
 from cities.melrose.core.reference import FetchReferenceService
-from cities.melrose.ports.inbound import CollectLogs, FetchReference, RebuildFromArchive
+from cities.melrose.core.sample import SampleService
+from cities.melrose.ports.inbound import CollectLogs, FetchReference, RebuildFromArchive, SamplePlacements
 from cities.melrose.settings import Settings
 
 
@@ -35,6 +37,7 @@ def collect_logs(
             reader=PdfLogReader(),
             archive=FileLogArchive(settings.raw_dir),
             repository=repository,
+            gazetteer=_gazetteer(settings),
             clock=SystemClock(),
             since=settings.since,
             known_call_types=settings.known_call_types,
@@ -48,10 +51,17 @@ def rebuild_from_archive(settings: Settings) -> Generator[RebuildFromArchive]:
             reader=PdfLogReader(),
             archive=FileLogArchive(settings.raw_dir),
             repository=repository,
+            gazetteer=_gazetteer(settings),
             clock=SystemClock(),
             since=settings.since,
             known_call_types=settings.known_call_types,
         )
+
+
+@contextmanager
+def sample_placements(settings: Settings) -> Generator[SamplePlacements]:
+    with _repository(settings) as repository:
+        yield SampleService(repository=repository)
 
 
 @contextmanager
@@ -63,6 +73,10 @@ def fetch_reference(settings: Settings, transport: httpx.BaseTransport | None = 
             clock=SystemClock(),
             layers=settings.reference_layers,
         )
+
+
+def _gazetteer(settings: Settings) -> SnapshotGazetteer:
+    return SnapshotGazetteer(settings.reference_dir, settings.boundary_rule)
 
 
 def _http(settings: Settings, transport: httpx.BaseTransport | None) -> httpx.Client:

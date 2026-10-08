@@ -6,11 +6,11 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-from cities.melrose.core import rules
+from cities.melrose.core import placing, rules
 from cities.melrose.domain.entries import EntryState, EntryStatus, EntryVersion, RawEntry
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, DocumentStatus
 from cities.melrose.domain.reports import Notice, NoticeKind, RunReport
-from cities.melrose.ports.outbound import EntryRepository, LogReader, LogUnreadable
+from cities.melrose.ports.outbound import EntryRepository, Gazetteer, LogReader, LogUnreadable
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +74,7 @@ class Snapshot:
 
 def derive_and_report(
     repository: EntryRepository,
+    gazetteer: Gazetteer,
     *,
     command: str,
     started_at: datetime,
@@ -84,13 +85,15 @@ def derive_and_report(
     loaded: Sequence[LoadedDocument],
     wrote: bool,
 ) -> RunReport:
-    """Re-derive the current entries when anything was written, and describe the result."""
+    """Re-derive the current entries and their placements when anything was written, and describe the result."""
     documents = repository.documents()
     versions = repository.versions()
     if wrote:
         repository.replace_entries(rules.current_entries(documents, versions))
     states = repository.entries()
     current = _current_versions(states, versions)
+    if wrote:
+        repository.replace_placements(placing.place_all(current, gazetteer))
     loaded_last = [d.last_date for d in documents if d.status is DocumentStatus.LOADED and d.last_date is not None]
     differing = rules.differing_versions(versions)
     return RunReport(
@@ -109,6 +112,7 @@ def derive_and_report(
         ),
         notices=tuple(n for d in loaded for n in d.notices),
         wrote=wrote,
+        placement=placing.summarise(repository.placements(), current),
     )
 
 

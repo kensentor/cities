@@ -52,3 +52,6 @@ TRUNCATED_RESULTS: frozenset[str] = frozenset(
 
 # Arrest results carry an age band and sex, and are sometimes printed without them.
 ARREST_RESULT = re.compile(r"\* Arrest(?: Under 17| 17 and Over| 17)?(?: Male| Female)?")
+
+# The call type design R7 ranks and AC2 measures. Phase 3's categories.toml groups call types for the map.
+STOP_CALL_TYPE = "MOTOR VEHICLE STOP"

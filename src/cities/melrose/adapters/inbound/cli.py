@@ -7,6 +7,7 @@ HTTP failure (nothing written); 3 a local storage failure.
 from __future__ import annotations
 
 import argparse
+import random
 from collections import Counter
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
@@ -14,8 +15,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TextIO
 
-from cities.melrose.domain.reports import NoticeKind, RunReport
-from cities.melrose.ports.inbound import CollectLogs, FetchReference, RebuildFromArchive
+from cities.melrose.domain.reports import NoticeKind, PlacementSummary, RunReport
+from cities.melrose.ports.inbound import CollectLogs, FetchReference, RebuildFromArchive, SamplePlacements
 from cities.melrose.ports.outbound import LogSourceUnavailable, ReferenceSourceUnavailable, StorageFailed
 
 EXIT_OK, EXIT_QUARANTINED, EXIT_NETWORK, EXIT_STORAGE = 0, 1, 2, 3
@@ -28,6 +29,7 @@ class UseCases:
     collect: Callable[[], AbstractContextManager[CollectLogs]]
     rebuild: Callable[[], AbstractContextManager[RebuildFromArchive]]
     fetch_reference: Callable[[], AbstractContextManager[FetchReference]]
+    sample: Callable[[], AbstractContextManager[SamplePlacements]]
 
 
 def run(argv: Sequence[str], use_cases: UseCases, out: TextIO) -> int:
@@ -39,7 +41,21 @@ def run(argv: Sequence[str], use_cases: UseCases, out: TextIO) -> int:
                     return _print_run(service.collect(since=args.since), out)
             case "rebuild":
                 with use_cases.rebuild() as service:
-                    return _print_run(service.rebuild(), out)
+                    return _print_run(service.rebuild(), out, boundary=True)
+            case "sample":
+                seed = args.seed if args.seed is not None else random.SystemRandom().randrange(10**6)
+                with use_cases.sample() as service:
+                    picked = service.sample(args.n, seed, call_types=args.type or ())
+                print(f"{len(picked)} placed entries, seed {seed}", file=out)
+                for version, placement in picked:
+                    assert placement.point is not None
+                    lat, lon = placement.point.lat, placement.point.lon
+                    print(f"\n{version.call_number}  {version.date}  {version.call_type}", file=out)
+                    print(f"  published: {version.location_prefix}: {version.location_raw}", file=out)
+                    print(f"  placed:    {placement.address_display}  ({placement.kind.value}; {placement.method})", file=out)
+                    print(f"  wards:     {', '.join(placement.wards)}", file=out)
+                    print(f"  https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=19/{lat}/{lon}", file=out)
+                return EXIT_OK
             case _:
                 with use_cases.fetch_reference() as service:
                     report = service.fetch_reference()
@@ -62,10 +78,14 @@ def _parser() -> argparse.ArgumentParser:
     collect.add_argument("--since", type=date.fromisoformat, default=None, help="earliest upload date (YYYY-MM-DD)")
     commands.add_parser("rebuild", help="re-read every archived log and derive everything again")
     commands.add_parser("fetch-reference", help="replace the snapshot of the reference layers")
+    sample = commands.add_parser("sample", help="print random placed entries to check against a map")
+    sample.add_argument("--n", type=int, default=20)
+    sample.add_argument("--seed", type=int, default=None, help="repeat an earlier sample")
+    sample.add_argument("--type", action="append", help="only this call type; repeat for several")
     return parser
 
 
-def _print_run(report: RunReport, out: TextIO) -> int:
+def _print_run(report: RunReport, out: TextIO, *, boundary: bool = False) -> int:
     def line(text: str = "") -> None:
         print(text, file=out)
 
@@ -95,7 +115,25 @@ def _print_run(report: RunReport, out: TextIO) -> int:
             ):
                 first_line = notice.text.splitlines()[0] if notice.text else ""
                 line(f"  {notice.media_id} {notice.call_number or '(no call number)'} {notice.kind.value}: {first_line}")
+    if report.placement is not None:
+        _print_placement(report.placement, line, boundary=boundary or report.wrote)
     return EXIT_QUARANTINED if report.quarantined else EXIT_OK
+
+
+def _print_placement(summary: PlacementSummary, line: Callable[[str], None], *, boundary: bool) -> None:
+    counts = ", ".join(f"{n} {kind}" for kind, n in summary.counts)
+    line(f"Placement against reference {summary.reference_version}: {counts}")
+    rate = summary.stop_rate
+    if rate is not None:
+        line(f"Stops placed: {summary.stops_placed} of {summary.stops_placeable} with a location to place ({rate:.1%})")
+    for call_number, why in summary.unplaced_stops:
+        line(f"  stop not placed: {call_number} {why}")
+    if summary.unknown_streets:
+        line("Unknown streets: " + ", ".join(f"{name} ({n})" for name, n in summary.unknown_streets))
+    if boundary and summary.boundary:
+        line("Boundary streets (rule 5): street, ward pair, placed entries near the edge, counted toward both wards")
+        for row in summary.boundary:
+            line(f"  {row.street:<24} {'/'.join(row.wards):<4} near {row.near:>3}  counted {row.counted:>3}")
 
 
 def _listing(line: Callable[[str], None], title: str, items: Sequence[str]) -> None:

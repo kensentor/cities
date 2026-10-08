@@ -9,6 +9,7 @@ from datetime import date
 from importlib import resources
 from pathlib import Path
 
+from cities.melrose.domain.places import BoundaryThresholds
 from cities.melrose.domain.reference import ReferenceLayer
 
 # Week of Jul 20, 2026: where collection starts (design spec R1).
@@ -16,6 +17,9 @@ COLLECT_SINCE = date(2026, 7, 20)
 USER_AGENT = "cities-melrose/0.1 (personal research: a map of the published Melrose dispatch logs)"
 REQUEST_INTERVAL_S = 2.0
 REQUEST_TIMEOUT_S = 60.0
+
+# Appendix C rule 5: the spec's own settings, not measured; Ken reviews the boundary streets they give (Q2).
+BOUNDARY_RULE = BoundaryThresholds(edge_m=40.0, window_m=60.0, along_m=20.0, share=0.6)
 
 REFERENCE_LAYERS: tuple[ReferenceLayer, ...] = (
     ReferenceLayer(
@@ -48,6 +52,7 @@ class Settings:
     request_timeout_s: float
     known_call_types: frozenset[str]
     reference_layers: tuple[ReferenceLayer, ...]
+    boundary_rule: BoundaryThresholds
 
     @property
     def raw_dir(self) -> Path:
@@ -73,6 +78,7 @@ def load_settings(environ: Mapping[str, str] = os.environ) -> Settings:
         request_timeout_s=REQUEST_TIMEOUT_S,
         known_call_types=known_call_types(),
         reference_layers=REFERENCE_LAYERS,
+        boundary_rule=BOUNDARY_RULE,
     )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
@@ -10,10 +11,11 @@ from pathlib import Path
 
 from cities.melrose.domain.entries import EntryState, EntryStatus, EntryVersion
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, DocumentStatus, PublishedLog
+from cities.melrose.domain.places import LocationForm, NearEdge, Placement, PlacementKind, Point
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.ports.outbound import EntryRepository, StorageFailed
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
@@ -47,6 +49,19 @@ CREATE TABLE IF NOT EXISTS entries (
     current_document_id INTEGER NOT NULL REFERENCES documents (id),
     status TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS placements (
+    call_number TEXT PRIMARY KEY,
+    form TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    address_display TEXT,
+    lon REAL,
+    lat REAL,
+    streets TEXT NOT NULL,
+    wards TEXT NOT NULL,
+    near_edges TEXT NOT NULL,
+    method TEXT NOT NULL,
+    reference_version TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,
     command TEXT NOT NULL,
@@ -60,7 +75,8 @@ CREATE TABLE IF NOT EXISTS runs (
     withdrawn INTEGER NOT NULL,
     new_call_types INTEGER NOT NULL,
     dates_without_entries INTEGER NOT NULL,
-    notices INTEGER NOT NULL
+    notices INTEGER NOT NULL,
+    placed_rate REAL
 );
 """
 
@@ -168,8 +184,41 @@ class SqliteEntryRepository(EntryRepository):
                 [(s.call_number, s.current_document_id, s.status.value) for s in states],
             )
 
+    def placements(self) -> Sequence[Placement]:
+        with self._reading() as db:
+            rows = db.execute(
+                "SELECT call_number, form, kind, address_display, lon, lat, streets, wards, near_edges, method, reference_version"
+                " FROM placements ORDER BY call_number"
+            ).fetchall()
+        return [_placement(row) for row in rows]
+
+    def replace_placements(self, placements: Sequence[Placement]) -> None:
+        with self._writing() as db:
+            db.execute("DELETE FROM placements")
+            db.executemany(
+                "INSERT INTO placements (call_number, form, kind, address_display, lon, lat, streets, wards, near_edges,"
+                " method, reference_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        p.call_number,
+                        p.form.value,
+                        p.kind.value,
+                        p.address_display,
+                        p.point.lon if p.point else None,
+                        p.point.lat if p.point else None,
+                        json.dumps(list(p.streets)),
+                        json.dumps(list(p.wards)),
+                        json.dumps([{"wards": list(e.wards), "along": e.along} for e in p.near_edges]),
+                        p.method,
+                        p.reference_version,
+                    )
+                    for p in placements
+                ],
+            )
+
     def clear_versions(self) -> None:
         with self._writing() as db:
+            db.execute("DELETE FROM placements")
             db.execute("DELETE FROM entries")
             db.execute("DELETE FROM entry_versions")
 
@@ -177,8 +226,8 @@ class SqliteEntryRepository(EntryRepository):
         with self._writing() as db:
             db.execute(
                 "INSERT INTO runs (command, started_at, finished_at, documents_new, entries_new, quarantined, conflicts,"
-                " versions_differing, withdrawn, new_call_types, dates_without_entries, notices)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " versions_differing, withdrawn, new_call_types, dates_without_entries, notices, placed_rate)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     report.command,
                     report.started_at.isoformat(),
@@ -192,6 +241,7 @@ class SqliteEntryRepository(EntryRepository):
                     len(report.new_call_types),
                     len(report.dates_without_entries),
                     len(report.notices),
+                    report.placement.stop_rate if report.placement else None,
                 ),
             )
 
@@ -251,4 +301,21 @@ def _version(row: tuple[object, ...]) -> EntryVersion:
         location_prefix=prefix if isinstance(prefix, str) else None,
         location_raw=location if isinstance(location, str) else None,
         raw_block=str(block),
+    )
+
+
+def _placement(row: tuple[object, ...]) -> Placement:
+    call_number, form, kind, address, lon, lat, streets, wards, edges, method, version = row
+    point = Point(float(str(lon)), float(str(lat))) if lon is not None and lat is not None else None
+    return Placement(
+        call_number=str(call_number),
+        form=LocationForm(str(form)),
+        kind=PlacementKind(str(kind)),
+        address_display=address if isinstance(address, str) else None,
+        point=point,
+        streets=tuple(json.loads(str(streets))),
+        wards=tuple(json.loads(str(wards))),
+        near_edges=tuple(NearEdge((e["wards"][0], e["wards"][1]), e["along"]) for e in json.loads(str(edges))),
+        method=str(method),
+        reference_version=str(version),
     )

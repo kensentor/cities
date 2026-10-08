@@ -8,11 +8,11 @@ from datetime import date
 from cities.melrose.core.loading import LoadedDocument, Snapshot, derive_and_report, load_document
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.ports.inbound import CollectLogs
-from cities.melrose.ports.outbound import Clock, EntryRepository, LogArchive, LogReader, LogSource
+from cities.melrose.ports.outbound import Clock, EntryRepository, Gazetteer, LogArchive, LogReader, LogSource
 
 
 class CollectService(CollectLogs):
-    __slots__ = ("_archive", "_clock", "_known_call_types", "_reader", "_repository", "_since", "_source")
+    __slots__ = ("_archive", "_clock", "_gazetteer", "_known_call_types", "_reader", "_repository", "_since", "_source")
 
     def __init__(
         self,
@@ -21,6 +21,7 @@ class CollectService(CollectLogs):
         reader: LogReader,
         archive: LogArchive,
         repository: EntryRepository,
+        gazetteer: Gazetteer,
         clock: Clock,
         since: date,
         known_call_types: Collection[str],
@@ -29,6 +30,7 @@ class CollectService(CollectLogs):
         self._reader = reader
         self._archive = archive
         self._repository = repository
+        self._gazetteer = gazetteer
         self._clock = clock
         self._since = since
         self._known_call_types = known_call_types
@@ -40,6 +42,8 @@ class CollectService(CollectLogs):
         new = [log for log in self._source.list_logs(uploaded_since=since) if log.media_id not in known]
         # Every download finishes before anything is written, so a network failure writes nothing.
         downloads = [(log, self._source.fetch(log), self._clock.now()) for log in new]
+        # Load the reference before writing, so a missing or broken snapshot writes nothing.
+        self._gazetteer.reference_version()
         before = Snapshot.of(self._repository)
         loaded: list[LoadedDocument] = []
         for log, pdf, fetched_at in downloads:
@@ -49,6 +53,7 @@ class CollectService(CollectLogs):
             loaded.append(document)
         report = derive_and_report(
             self._repository,
+            self._gazetteer,
             command="collect",
             started_at=started_at,
             finished_at=self._clock.now(),

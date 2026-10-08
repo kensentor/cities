@@ -37,6 +37,34 @@ class Notice:
 
 
 @dataclass(frozen=True, slots=True)
+class BoundaryRow:
+    """A street near a shared ward edge: placed entries on it within reach of the edge, and how many
+    rule 5 counted toward both wards. Ken checks these against the city ward map (phase 2 gate)."""
+
+    street: str  # display form
+    wards: tuple[str, str]
+    near: int
+    counted: int
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementSummary:
+    reference_version: str
+    counts: tuple[tuple[str, int], ...]  # (placement kind, entries)
+    # Design AC2: stops whose location gives something to place (an address, an intersection, a
+    # named place or another town), and how many of them are on the map.
+    stops_placeable: int
+    stops_placed: int
+    unplaced_stops: tuple[tuple[str, str], ...]  # (call number, why)
+    unknown_streets: tuple[tuple[str, int], ...]  # (as printed, entries)
+    boundary: tuple[BoundaryRow, ...]
+
+    @property
+    def stop_rate(self) -> float | None:
+        return self.stops_placed / self.stops_placeable if self.stops_placeable else None
+
+
+@dataclass(frozen=True, slots=True)
 class RunReport:
     command: str
     started_at: datetime
@@ -55,3 +83,4 @@ class RunReport:
     notices: tuple[Notice, ...] = field(default=())
     # False when the run found nothing new and wrote nothing.
     wrote: bool = True
+    placement: PlacementSummary | None = None

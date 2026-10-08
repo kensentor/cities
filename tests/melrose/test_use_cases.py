@@ -13,10 +13,11 @@ from cities.melrose.core.reference import FetchReferenceService
 from cities.melrose.domain.entries import EntryStatus, ReadLog, SegmentKind
 from cities.melrose.domain.logs import DocumentStatus, PublishedLog
 from cities.melrose.domain.reference import ReferenceLayer
-from cities.melrose.ports.outbound import LogSourceUnavailable, ReferenceSourceUnavailable
+from cities.melrose.ports.outbound import LogSourceUnavailable, ReferenceSourceUnavailable, StorageFailed
 from cities.melrose.stubs import (
     FakeClock,
     InMemoryEntryRepository,
+    InMemoryGazetteer,
     InMemoryLogArchive,
     InMemoryLogSource,
     InMemoryReferenceSource,
@@ -37,6 +38,7 @@ class World:
         self.reader = ScriptedLogReader({pdf: read for pdf, read in logs.values()})
         self.archive = InMemoryLogArchive()
         self.repository = InMemoryEntryRepository()
+        self.gazetteer = InMemoryGazetteer()
 
     def collect(self) -> CollectService:
         return CollectService(
@@ -44,6 +46,7 @@ class World:
             reader=self.reader,
             archive=self.archive,
             repository=self.repository,
+            gazetteer=self.gazetteer,
             clock=FakeClock(),
             since=SINCE,
             known_call_types=KNOWN_TYPES,
@@ -54,6 +57,7 @@ class World:
             reader=self.reader,
             archive=self.archive,
             repository=repository or self.repository,
+            gazetteer=self.gazetteer,
             clock=FakeClock(),
             since=SINCE,
             known_call_types=KNOWN_TYPES,
@@ -128,6 +132,28 @@ def test_rebuild_from_the_archive_equals_incremental_collection() -> None:
     assert fresh.documents() == world.repository.documents()
     assert fresh.versions() == world.repository.versions()
     assert fresh.entries() == world.repository.entries()
+    assert fresh.placements() == world.repository.placements()
+    assert len(fresh.placements()) == 2
+
+
+def test_a_missing_reference_snapshot_writes_nothing() -> None:
+    class MissingSnapshot(InMemoryGazetteer):
+        def reference_version(self) -> str:
+            raise StorageFailed("reference snapshot missing")
+
+    world = World({published(11, date(2026, 7, 29)): (b"w1", WEEK_1)})
+    world.gazetteer = MissingSnapshot()
+    with pytest.raises(StorageFailed):
+        world.collect().collect()
+    assert (world.repository.writes, world.archive.logs) == (0, {})
+
+
+def test_a_collect_that_writes_nothing_still_reports_the_stored_placements() -> None:
+    world = World({published(11, date(2026, 7, 29)): (b"w1", WEEK_1)})
+    world.collect().collect()
+    report = world.collect().collect()
+    assert not report.wrote
+    assert report.placement is not None and dict(report.placement.counts) == {"none": 2}
 
 
 def test_reference_snapshot_is_kept_when_a_layer_comes_back_short() -> None:

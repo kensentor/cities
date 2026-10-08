@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
 from functools import partial
 from pathlib import Path
 
 import httpx
-from support import ALL_LOGS, FIXTURES, archived, archived_pdf
+from support import ALL_LOGS, FIXTURES, REPO, archived, archived_pdf
 
 from cities.melrose import composition
 from cities.melrose.adapters.inbound import cli
@@ -30,11 +31,15 @@ def site(refuse: bool = False) -> httpx.MockTransport:
 
 
 def run(tmp_path: Path, *argv: str, transport: httpx.BaseTransport | None = None) -> tuple[int, str]:
+    reference = tmp_path / "melrose" / "reference"
+    if not reference.exists():
+        shutil.copytree(REPO / "data" / "melrose" / "reference", reference)
     settings = load_settings({"CITIES_DATA_DIR": str(tmp_path)})
     use_cases = cli.UseCases(
         collect=partial(composition.collect_logs, settings, transport, pause=False),
         rebuild=partial(composition.rebuild_from_archive, settings),
         fetch_reference=partial(composition.fetch_reference, settings, transport),
+        sample=partial(composition.sample_placements, settings),
     )
     out = io.StringIO()
     return cli.run(argv, use_cases, out), out.getvalue()
@@ -53,6 +58,13 @@ def test_collect_then_collect_again_then_rebuild(tmp_path: Path) -> None:
     code, out = run(tmp_path, "rebuild")
     assert code == cli.EXIT_OK, out
     assert "new entries: 0" in out
+    assert "Stops placed: 331 of 332" in out
+    assert "Boundary streets (rule 5)" in out
+
+    code, out = run(tmp_path, "sample", "--n", "3", "--seed", "7", "--type", "MOTOR VEHICLE STOP")
+    assert code == cli.EXIT_OK, out
+    assert out.startswith("3 placed entries, seed 7")
+    assert out.count("https://www.openstreetmap.org/?mlat=") == 3
 
 
 def test_a_refused_request_exits_2_and_writes_nothing(tmp_path: Path) -> None:

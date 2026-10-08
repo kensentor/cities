@@ -17,5 +17,6 @@ def main(argv: Sequence[str]) -> int:
         collect=partial(composition.collect_logs, settings),
         rebuild=partial(composition.rebuild_from_archive, settings),
         fetch_reference=partial(composition.fetch_reference, settings),
+        sample=partial(composition.sample_placements, settings),
     )
     return cli.run(argv, use_cases, sys.stdout)

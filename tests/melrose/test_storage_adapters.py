@@ -15,6 +15,7 @@ from cities.melrose.adapters.outbound.reference_files import GeoJsonReferenceSto
 from cities.melrose.adapters.outbound.sqlite_repo import SqliteEntryRepository
 from cities.melrose.domain.entries import EntryState, EntryStatus, EntryVersion
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, DocumentStatus
+from cities.melrose.domain.places import LocationForm, NearEdge, Placement, PlacementKind, Point
 from cities.melrose.domain.reference import LayerSnapshot, ReferenceLayer
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.ports.outbound import StorageFailed
@@ -68,6 +69,27 @@ def test_repository_round_trips_documents_versions_and_entries(tmp_path: Path) -
     assert repository.documents() == [record]
     assert repository.versions() == [v]
     assert repository.entries() == [EntryState("26-11102", 7, EntryStatus.CURRENT)]
+
+
+def test_repository_round_trips_placements_and_clears_them_with_the_versions(tmp_path: Path) -> None:
+    repository = SqliteEntryRepository.open(tmp_path / "db.sqlite")
+    placed = Placement(
+        "26-11115",
+        LocationForm.ADDRESS,
+        PlacementKind.ADDRESS,
+        "744 LYNN FELLS PKWY",
+        Point(-71.071786, 42.450733),
+        ("Lynn Fells Pkwy",),
+        ("2", "4"),
+        (NearEdge(("2", "4"), "LYNN FELLS PARKWAY"),),
+        "exact address",
+        "2026-10-08",
+    )
+    unplaced = Placement("26-1", LocationForm.NONE, PlacementKind.NONE, None, None, (), (), (), "no location", "2026-10-08")
+    repository.replace_placements([placed, unplaced])
+    assert repository.placements() == [unplaced, placed]
+    repository.clear_versions()
+    assert repository.placements() == []
 
 
 def test_saving_a_document_again_replaces_its_versions(tmp_path: Path) -> None:

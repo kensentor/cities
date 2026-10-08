@@ -13,6 +13,7 @@ from typing import Protocol
 
 from cities.melrose.domain.entries import EntryState, EntryVersion, ReadLog
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, PublishedLog
+from cities.melrose.domain.places import Located, Placement, Point, StreetRef, WardSurroundings
 from cities.melrose.domain.reference import LayerSnapshot, ReferenceLayer
 from cities.melrose.domain.reports import RunReport
 
@@ -94,8 +95,14 @@ class EntryRepository(Protocol):
     def replace_entries(self, states: Sequence[EntryState]) -> None: ...
 
     @abstractmethod
+    def placements(self) -> Sequence[Placement]: ...
+
+    @abstractmethod
+    def replace_placements(self, placements: Sequence[Placement]) -> None: ...
+
+    @abstractmethod
     def clear_versions(self) -> None:
-        """Remove every version and entry, keeping documents, before a rebuild."""
+        """Remove every version, entry and placement, keeping documents, before a rebuild."""
 
     @abstractmethod
     def record_run(self, report: RunReport) -> None: ...
@@ -120,6 +127,37 @@ class ReferenceStore(Protocol):
 
     @abstractmethod
     def replace(self, snapshots: Sequence[LayerSnapshot], fetched_at: datetime) -> None: ...
+
+
+class Gazetteer(Protocol):
+    """Locate addresses and street crossings in Melrose, and describe the wards around a point.
+
+    Street names are the reference's own, spelled out ("FRANKLIN STREET"). Locating applies
+    Appendix C rules 3 and 4; describing the wards applies the geometry of rule 5. What the entry
+    then counts toward is the core's decision.
+    """
+
+    __slots__ = ()
+
+    @abstractmethod
+    def reference_version(self) -> str:
+        """The snapshot's version. Loads the snapshot, so a missing one fails before anything is written."""
+
+    @abstractmethod
+    def street_names(self) -> frozenset[str]: ...
+
+    @abstractmethod
+    def locate_address(self, street: StreetRef) -> Located: ...
+
+    @abstractmethod
+    def locate_intersection(self, first: StreetRef, second: StreetRef) -> Located: ...
+
+    @abstractmethod
+    def distance_outside_city_m(self, point: Point) -> float:
+        """0 inside Melrose; otherwise metres to its boundary."""
+
+    @abstractmethod
+    def wards_around(self, point: Point, streets: Sequence[str]) -> WardSurroundings: ...
 
 
 class Clock(Protocol):

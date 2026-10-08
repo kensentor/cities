@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from collections.abc import Collection, Sequence
 from datetime import date
 from typing import Protocol
 
+from cities.melrose.domain.entries import EntryVersion
+from cities.melrose.domain.places import Placement
 from cities.melrose.domain.reference import ReferenceReport
 from cities.melrose.domain.reports import RunReport
 
@@ -35,3 +38,13 @@ class FetchReference(Protocol):
 
     @abstractmethod
     def fetch_reference(self) -> ReferenceReport: ...
+
+
+class SamplePlacements(Protocol):
+    """Random placed entries, for checking by eye that each lies where its log says (design AC3)."""
+
+    __slots__ = ()
+
+    @abstractmethod
+    def sample(self, n: int, seed: int, call_types: Collection[str] = ()) -> Sequence[tuple[EntryVersion, Placement]]:
+        """`call_types` limits the sample to those call types; empty means every placed entry."""

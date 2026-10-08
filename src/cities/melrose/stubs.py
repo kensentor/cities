@@ -9,11 +9,13 @@ from datetime import UTC, date, datetime, timedelta
 
 from cities.melrose.domain.entries import EntryState, EntryVersion, ReadLog
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, PublishedLog
+from cities.melrose.domain.places import Located, NearEdge, Placement, Point, StreetRef, WardSurroundings
 from cities.melrose.domain.reference import LayerSnapshot, ReferenceLayer
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.ports.outbound import (
     Clock,
     EntryRepository,
+    Gazetteer,
     LogArchive,
     LogReader,
     LogSource,
@@ -83,6 +85,7 @@ class InMemoryEntryRepository(EntryRepository):
     document_rows: dict[int, DocumentRecord] = field(default_factory=dict)
     version_rows: dict[tuple[str, int], EntryVersion] = field(default_factory=dict)
     entry_rows: dict[str, EntryState] = field(default_factory=dict)
+    placement_rows: dict[str, Placement] = field(default_factory=dict)
     runs: list[RunReport] = field(default_factory=list)
     writes: int = 0
 
@@ -110,8 +113,16 @@ class InMemoryEntryRepository(EntryRepository):
         self.writes += 1
         self.entry_rows = {s.call_number: s for s in states}
 
+    def placements(self) -> Sequence[Placement]:
+        return [self.placement_rows[k] for k in sorted(self.placement_rows)]
+
+    def replace_placements(self, placements: Sequence[Placement]) -> None:
+        self.writes += 1
+        self.placement_rows = {p.call_number: p for p in placements}
+
     def clear_versions(self) -> None:
         self.writes += 1
+        self.placement_rows.clear()
         self.entry_rows.clear()
         self.version_rows.clear()
 
@@ -146,6 +157,44 @@ class InMemoryReferenceStore(ReferenceStore):
     def replace(self, snapshots: Sequence[LayerSnapshot], fetched_at: datetime) -> None:
         self.snapshots = list(snapshots)
         self.fetched_at = fetched_at
+
+
+@dataclass(slots=True)
+class InMemoryGazetteer(Gazetteer):
+    """A fixed street plan: known addresses and crossings, one ward per point, and the edges each point is near.
+
+    Points are placed where `addresses` and `crossings` say; `outside` names points beyond the city
+    by their distance; `near_edges` gives each point's near edges, with the street running along.
+    """
+
+    addresses: dict[tuple[str, int], Point] = field(default_factory=dict)
+    crossings: dict[frozenset[str], Point] = field(default_factory=dict)
+    ward_of: dict[Point, str] = field(default_factory=dict)
+    near_edges: dict[Point, tuple[NearEdge, ...]] = field(default_factory=dict)
+    outside: dict[Point, float] = field(default_factory=dict)
+    extra_streets: frozenset[str] = frozenset()
+    version: str = "2026-10-08"
+
+    def reference_version(self) -> str:
+        return self.version
+
+    def street_names(self) -> frozenset[str]:
+        return frozenset(name for name, _ in self.addresses) | {n for pair in self.crossings for n in pair} | self.extra_streets
+
+    def locate_address(self, street: StreetRef) -> Located:
+        point = self.addresses.get((street.name, street.number or -1))
+        return Located(point, "exact address" if point else "address not found")
+
+    def locate_intersection(self, first: StreetRef, second: StreetRef) -> Located:
+        point = self.crossings.get(frozenset({first.name, second.name}))
+        return Located(point, "crossing" if point else "intersection not found")
+
+    def distance_outside_city_m(self, point: Point) -> float:
+        return self.outside.get(point, 0.0)
+
+    def wards_around(self, point: Point, streets: Sequence[str]) -> WardSurroundings:
+        edges = tuple(e if e.along is None or e.along in streets else NearEdge(e.wards, None) for e in self.near_edges.get(point, ()))
+        return WardSurroundings(self.ward_of.get(point), edges)
 
 
 class FakeClock(Clock):

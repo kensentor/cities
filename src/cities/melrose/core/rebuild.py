@@ -8,11 +8,11 @@ from datetime import date
 from cities.melrose.core.loading import LoadedDocument, Snapshot, derive_and_report, load_document
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.ports.inbound import RebuildFromArchive
-from cities.melrose.ports.outbound import Clock, EntryRepository, LogArchive, LogReader
+from cities.melrose.ports.outbound import Clock, EntryRepository, Gazetteer, LogArchive, LogReader
 
 
 class RebuildService(RebuildFromArchive):
-    __slots__ = ("_archive", "_clock", "_known_call_types", "_reader", "_repository", "_since")
+    __slots__ = ("_archive", "_clock", "_gazetteer", "_known_call_types", "_reader", "_repository", "_since")
 
     def __init__(
         self,
@@ -20,6 +20,7 @@ class RebuildService(RebuildFromArchive):
         reader: LogReader,
         archive: LogArchive,
         repository: EntryRepository,
+        gazetteer: Gazetteer,
         clock: Clock,
         since: date,
         known_call_types: Collection[str],
@@ -27,12 +28,14 @@ class RebuildService(RebuildFromArchive):
         self._reader = reader
         self._archive = archive
         self._repository = repository
+        self._gazetteer = gazetteer
         self._clock = clock
         self._since = since
         self._known_call_types = known_call_types
 
     def rebuild(self) -> RunReport:
         started_at = self._clock.now()
+        self._gazetteer.reference_version()  # load the reference before clearing anything
         before = Snapshot.of(self._repository)
         self._repository.clear_versions()
         loaded: list[LoadedDocument] = []
@@ -42,6 +45,7 @@ class RebuildService(RebuildFromArchive):
             loaded.append(document)
         report = derive_and_report(
             self._repository,
+            self._gazetteer,
             command="rebuild",
             started_at=started_at,
             finished_at=self._clock.now(),
