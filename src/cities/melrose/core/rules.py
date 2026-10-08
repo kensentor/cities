@@ -68,6 +68,32 @@ def assign_dates(entries: Sequence[RawEntry], declared_from: date | None) -> lis
     return [e.date if e.date is not None else inferred for e in entries]
 
 
+def restore_lost_headings(entries: Sequence[RawEntry], dates: Sequence[date]) -> tuple[list[date], list[int]]:
+    """Give the entries of a day whose heading the log lost their own date (A17).
+
+    When the headings skip exactly one day, its entries sit under the day before. They start at that
+    day's one overnight reset, an entry at 1800 or later followed by one before 0600 (442335: 26-5501
+    at 2007, then 26-5516 at 0203). Late-filed calls also run times backwards, but not overnight. A
+    day with no single reset rejects the document; a longer gap is left alone. Returns the dates and, for each restored
+    day, the index of its first entry.
+    """
+    restored = list(dates)
+    starts: list[int] = []
+    days = sorted(set(dates))
+    for earlier, later in zip(days, days[1:], strict=False):
+        lost = earlier + timedelta(days=1)
+        if later != lost + timedelta(days=1):
+            continue
+        day = [i for i, d in enumerate(dates) if d == earlier]
+        resets = [b for a, b in zip(day, day[1:], strict=False) if entries[a].time >= "1800" and entries[b].time < "0600"]
+        if len(resets) != 1:
+            raise DocumentRejected(f"the headings skip {lost}, and no single overnight reset shows where it starts")
+        for i in day[day.index(resets[0]) :]:
+            restored[i] = lost
+        starts.append(resets[0])
+    return restored, starts
+
+
 @dataclass(frozen=True, slots=True)
 class Interpreted:
     versions: list[EntryVersion]
@@ -76,7 +102,9 @@ class Interpreted:
     inferred: frozenset[str] = frozenset()
 
 
-def interpret(entries: Sequence[RawEntry], dates: Sequence[date], media_id: int) -> Interpreted:
+def interpret(
+    entries: Sequence[RawEntry], dates: Sequence[date], media_id: int, known_call_types: Collection[str]
+) -> Interpreted:
     """Turn observed entries into versions. Raises DocumentRejected for a header it cannot split."""
     versions: list[EntryVersion] = []
     notices: list[Notice] = []
@@ -92,12 +120,14 @@ def interpret(entries: Sequence[RawEntry], dates: Sequence[date], media_id: int)
                 continue
             inferred.add(call_number)
             notices.append(Notice(media_id, call_number, NoticeKind.INFERRED_CALL_NUMBER, block))
-        header, spare = _split_longest(raw.header_lines)
+        header, spare = _split_longest(raw.header_lines, known_call_types)
         if header is None:
             raise DocumentRejected(f"unknown result in {call_number}: {join_wrapped(raw.header_lines)!r}")
         notices.extend(Notice(media_id, call_number, NoticeKind.LEFTOVER_LINE, line) for line in spare)
         if header.truncated:
             notices.append(Notice(media_id, call_number, NoticeKind.TRUNCATED_RESULT, header.result))
+        if not header.result:
+            notices.append(Notice(media_id, call_number, NoticeKind.MISSING_RESULT, header.call_type))
         prefix, location = _location(raw, call_number, media_id, notices)
         versions.append(
             EntryVersion(
@@ -127,12 +157,16 @@ def _referenced_call(raw: RawEntry) -> str | None:
     return match.group(1) if match else None
 
 
-def _split_longest(lines: Sequence[str]) -> tuple[Header | None, Sequence[str]]:
+def _split_longest(lines: Sequence[str], known_call_types: Collection[str]) -> tuple[Header | None, Sequence[str]]:
     """Split the most header lines that end in a known result; lines after them are left over.
 
     A wrapped-looking line under a complete header can be what remains of a withheld entry, such
-    as the "26" of a removed call number, so the header ends where the result does.
+    as the "26" of a removed call number, so the header ends where the result does. A header that is
+    exactly a known call type was printed with no result ("25-13757 1541 MISSING PERSON"); that is
+    checked first, so a call type ending in a result's words ("Make Notification") stays whole.
     """
+    if (text := join_wrapped(lines)) in known_call_types:
+        return Header(text, "", truncated=False), ()
     for end in range(len(lines), 0, -1):
         if (header := split_header(lines[:end])) is not None:
             return header, lines[end:]

@@ -14,8 +14,8 @@ from cities.melrose.domain.places import BoundaryThresholds
 from cities.melrose.domain.public import Category
 from cities.melrose.domain.reference import ReferenceLayer
 
-# Week of Jul 20, 2026: where collection starts (design spec R1).
-COLLECT_SINCE = date(2026, 7, 20)
+# Jan 1, 2025: where collection starts (design spec R1, amended by A16).
+COLLECT_SINCE = date(2025, 1, 1)
 USER_AGENT = "cities-melrose/0.1 (personal research: a map of the published Melrose dispatch logs)"
 REQUEST_INTERVAL_S = 2.0
 REQUEST_TIMEOUT_S = 60.0

@@ -27,10 +27,12 @@ PLACED = (PlacementKind.ADDRESS, PlacementKind.INTERSECTION)
 
 # A result printed cut short is shown as its full form when exactly one known result completes it
 # (A10), so a result filter catches it; "False Alarm/Cancelled Alarm Co" has none and stays as printed.
+# Arrests are matched by pattern rather than listed, so "* Arrest" stands in for them here: "*" could be
+# an arrest or "* Report taken", and stays as printed.
 _COMPLETIONS: dict[str, str] = {
     cut: full[0]
     for cut in TRUNCATED_RESULTS
-    if len(full := sorted(k for k in KNOWN_RESULTS if k.startswith(cut + " "))) == 1
+    if len(full := sorted(k for k in KNOWN_RESULTS | {"* Arrest"} if k.startswith(cut + " "))) == 1
 }
 
 

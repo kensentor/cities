@@ -44,12 +44,12 @@ def test_an_unknown_result_does_not_split(header: str) -> None:
 
 def test_an_unknown_result_rejects_the_document() -> None:
     with pytest.raises(rules.DocumentRejected, match="unknown result in 26-1"):
-        rules.interpret([entry("26-1", DAY, "MOTOR VEHICLE STOP Warned Loudly")], [DAY], 1)
+        rules.interpret([entry("26-1", DAY, "MOTOR VEHICLE STOP Warned Loudly")], [DAY], 1, ())
 
 
 def test_a_header_line_after_a_complete_result_is_left_over() -> None:
     raw = replace(entry("26-8623", DAY), header_lines=("MEDICAL EMERGENCY Transported to Hospital", "26"))
-    out = rules.interpret([raw], [DAY], 1)
+    out = rules.interpret([raw], [DAY], 1, ())
     assert out.versions[0].result == "Transported to Hospital"
     assert [(n.kind, n.text) for n in out.notices] == [(NoticeKind.LEFTOVER_LINE, "26")]
 
@@ -78,7 +78,7 @@ def test_location_is_the_first_location_line_before_any_id_or_reference() -> Non
         (SegmentKind.ID, ""),
         (SegmentKind.VICINITY, "1053 MAIN ST @ 12 LOVELL RD"),
     )
-    out = rules.interpret([raw], [DAY], 1)
+    out = rules.interpret([raw], [DAY], 1, ())
     assert (out.versions[0].location_prefix, out.versions[0].location_raw) == ("Vicinity of", "350 LYNN FELLS PKWY @ 102 TREMONT ST")
     assert [(n.kind, n.text) for n in out.notices] == [(NoticeKind.TRAILING_LOCATION, "1053 MAIN ST @ 12 LOVELL RD")]
 
@@ -86,27 +86,27 @@ def test_location_is_the_first_location_line_before_any_id_or_reference() -> Non
 def test_trailing_location_never_becomes_the_entry_location() -> None:
     """A withheld entry's location left on the page after an ID line must not be shown as this entry's."""
     raw = entry("26-11075", DAY, "Restraining Order Violation * Arrest 17", (SegmentKind.REFER, "26-11075-AR"), (SegmentKind.LOCATION_ADDRESS, "10 COREY ST"))
-    out = rules.interpret([raw], [DAY], 1)
+    out = rules.interpret([raw], [DAY], 1, ())
     assert out.versions[0].location_raw is None
     assert out.notices[0].kind is NoticeKind.TRAILING_LOCATION
 
 
 def test_second_location_line_is_trailing_even_before_an_id_line() -> None:
     raw = entry("26-1", DAY, "MOTOR VEHICLE STOP Verbal Warning", (SegmentKind.LOCATION_ADDRESS, "A ST"), (SegmentKind.VICINITY, "B ST"))
-    out = rules.interpret([raw], [DAY], 1)
+    out = rules.interpret([raw], [DAY], 1, ())
     assert out.versions[0].location_raw == "A ST"
     assert [n.text for n in out.notices] == ["B ST"]
 
 
 def test_an_entry_without_a_call_number_or_a_refer_to_is_reported_not_stored() -> None:
-    out = rules.interpret([entry("26-1", DAY), entry(None, DAY, "Well Being Check * Report taken")], [DAY, DAY], 1)
+    out = rules.interpret([entry("26-1", DAY), entry(None, DAY, "Well Being Check * Report taken")], [DAY, DAY], 1, ())
     assert [v.call_number for v in out.versions] == ["26-1"]
     assert [n.kind for n in out.notices] == [NoticeKind.UNNUMBERED_ENTRY]
 
 
 def test_an_entry_without_a_call_number_takes_the_one_its_refer_to_names() -> None:
     unnumbered = entry(None, DAY, "Well Being Check * Report taken", (SegmentKind.REFER, "26-9817-OF"), time="1559")
-    out = rules.interpret([entry("26-9816", DAY), unnumbered], [DAY, DAY], 1)
+    out = rules.interpret([entry("26-9816", DAY), unnumbered], [DAY, DAY], 1, ())
     assert [v.call_number for v in out.versions] == ["26-9816", "26-9817"]
     assert out.inferred == frozenset({"26-9817"})
     assert [n.kind for n in out.notices] == [NoticeKind.INFERRED_CALL_NUMBER]
@@ -115,14 +115,14 @@ def test_an_entry_without_a_call_number_takes_the_one_its_refer_to_names() -> No
 
 def test_a_refer_to_naming_a_call_printed_in_the_same_log_is_not_used() -> None:
     unnumbered = entry(None, DAY, "Well Being Check * Report taken", (SegmentKind.REFER, "26-9816-OF"))
-    out = rules.interpret([entry("26-9816", DAY), unnumbered], [DAY, DAY], 1)
+    out = rules.interpret([entry("26-9816", DAY), unnumbered], [DAY, DAY], 1, ())
     assert [v.call_number for v in out.versions] == ["26-9816"]
     assert [n.kind for n in out.notices] == [NoticeKind.UNNUMBERED_ENTRY]
 
 
 def test_a_lettered_reference_names_its_base_call() -> None:
     unnumbered = entry(None, DAY, "Well Being Check * Report taken", (SegmentKind.REFER, "26-8468-A-OF"))
-    assert rules.interpret([unnumbered], [DAY], 1).versions[0].call_number == "26-8468"
+    assert rules.interpret([unnumbered], [DAY], 1, ()).versions[0].call_number == "26-8468"
 
 
 def test_completeness_rejects_a_count_mismatch_and_duplicates() -> None:
@@ -172,3 +172,41 @@ def _doc(media_id: int, uploaded: date) -> DocumentRecord:
 
 def _version(call_number: str, document_id: int) -> EntryVersion:
     return EntryVersion(call_number, document_id, 1, date(2026, 4, 8), "1200", "MOTOR VEHICLE STOP", "Verbal Warning", "Location/Address", "1 MAIN ST", "")
+
+
+def test_a_header_that_is_exactly_a_known_call_type_has_no_result() -> None:
+    out = rules.interpret([entry("25-13757", DAY, "MISSING PERSON")], [DAY], 1, {"MISSING PERSON"})
+    assert (out.versions[0].call_type, out.versions[0].result) == ("MISSING PERSON", "")
+    assert [(n.kind, n.text) for n in out.notices] == [(NoticeKind.MISSING_RESULT, "MISSING PERSON")]
+
+
+def test_a_call_type_ending_in_a_results_words_stays_whole() -> None:
+    out = rules.interpret([entry("26-1", DAY, "Make Notification")], [DAY], 1, {"Make Notification"})
+    assert (out.versions[0].call_type, out.versions[0].result) == ("Make Notification", "")
+
+
+def test_a_header_with_no_result_that_is_not_a_known_call_type_still_rejects_the_document() -> None:
+    with pytest.raises(rules.DocumentRejected, match="unknown result in 26-1"):
+        rules.interpret([entry("26-1", DAY, "MISSING PERSONS")], [DAY], 1, {"MISSING PERSON"})
+
+
+MAY_11, MAY_12, MAY_13 = date(2026, 5, 11), date(2026, 5, 12), date(2026, 5, 13)
+
+
+def test_a_lost_heading_is_restored_at_the_one_overnight_reset() -> None:
+    entries = [entry("26-5500", MAY_11, time="1923"), entry("26-5501", MAY_11, time="2007"), entry("26-5516", MAY_11, time="0203"), entry("26-5583", MAY_13, time="0010")]
+    dates, starts = rules.restore_lost_headings(entries, [e.date for e in entries if e.date])
+    assert dates == [MAY_11, MAY_11, MAY_12, MAY_13]
+    assert starts == [2]
+
+
+def test_a_skipped_day_without_one_overnight_reset_rejects_the_document() -> None:
+    late_filed = [entry("26-1", MAY_11, time="2212"), entry("26-2", MAY_11, time="1110"), entry("26-3", MAY_13)]
+    with pytest.raises(rules.DocumentRejected, match="skip 2026-05-12"):
+        rules.restore_lost_headings(late_filed, [e.date for e in late_filed if e.date])
+
+
+def test_consecutive_days_and_longer_gaps_are_left_alone() -> None:
+    entries = [entry("26-1", MAY_11, time="2300"), entry("26-2", MAY_11, time="0100"), entry("26-3", date(2026, 5, 15))]
+    dates = [e.date for e in entries if e.date]
+    assert rules.restore_lost_headings(entries, dates) == (dates, [])

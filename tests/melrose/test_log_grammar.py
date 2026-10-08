@@ -148,3 +148,33 @@ def test_unlabelled_lines_before_any_entry_are_stray() -> None:
 def test_call_numbers_are_counted_from_the_text_not_from_the_grammar() -> None:
     log = parse([], ["26-11101 0839 ALARM ... 26-11102 0858 MOTOR ... Refer To Incident: 26-11122-OF"])
     assert log.call_numbers_in_text == 2
+
+
+def test_a_call_line_glued_to_the_previous_entrys_id_label_opens_its_own_entry() -> None:
+    log = read(
+        line("For Date: 02/19/2025 - Wednesday"),
+        line("25-2175 1500 ALARM, RESIDENTIAL Unit Clear"),
+        line("Location/Address: 1 MAIN ST"),
+        line("ID: 25-2176 1530 ALARM, RESIDENTIAL Unit Clear"),
+        line("Location/Address: 5 BRAZIL ST"),
+        line(": 25-2177 1600 HARASSMENT * Report taken"),
+    )
+    assert [e.call_number for e in log.entries] == ["25-2175", "25-2176", "25-2177"]
+    first, second, _ = log.entries
+    assert [(s.kind, s.text) for s in first.segments] == [(SegmentKind.LOCATION_ADDRESS, "1 MAIN ST"), (SegmentKind.ID, "")]
+    assert [(s.kind, s.text) for s in second.segments] == [(SegmentKind.LOCATION_ADDRESS, "5 BRAZIL ST"), (SegmentKind.LEFTOVER, ":")]
+    assert log.call_numbers_in_text == 3
+
+
+def test_a_date_heading_printed_cut_short_is_still_a_heading() -> None:
+    log = read(
+        line("or Date: 05/26/2025 - Monday"),
+        line("25-6449 0053 MOTOR VEHICLE STOP Verbal Warning"),
+        line("Date: 05/27/2025 - Tuesday"),
+        line("25-6460 0100 MOTOR VEHICLE STOP Verbal Warning"),
+    )
+    assert [e.date for e in log.entries] == [date(2025, 5, 26), date(2025, 5, 27)]
+
+
+def test_call_numbers_of_fewer_than_four_digits_are_counted() -> None:
+    assert parse([], ["26-1 0001 ALARM ... 25-316 0102 ALARM ... 26-137 1505 MVA"]).call_numbers_in_text == 3

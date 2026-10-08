@@ -25,6 +25,10 @@ class NoticeKind(StrEnum):
     LEFTOVER_LINE = "leftover line"
     # A result printed cut short, stored as printed.
     TRUNCATED_RESULT = "truncated result"
+    # The first entry of a day whose date heading the log lost, dated by the overnight reset (A17).
+    INFERRED_DATE = "inferred date"
+    # A call type printed with no result after it, stored with an empty result.
+    MISSING_RESULT = "missing result"
     # A line before the document's first entry that is neither a date heading nor page furniture.
     STRAY_LINE = "stray line"
 

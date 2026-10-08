@@ -22,6 +22,10 @@ SEP_7 = 442432
 SEP_14 = 442443
 SEP_21 = 442445
 ALL_LOGS = (442380, 442381, 442404, 442405, 442423, 442426, 442427, 442431, 442432, 442443, 442445)
+JUN_2018 = 442319  # Jun 4-10, 2018, re-uploaded in 2026
+OCT_2021 = 442361  # Oct 11-17, 2021, re-uploaded in 2026
+# Every log in the archive, the v1 weeks and the backfill from Jan 2025 (A16).
+ARCHIVED = tuple(sorted(a.log.media_id for a in FileLogArchive(RAW).archived()))
 
 
 def archived(media_id: int) -> ArchivedLog:

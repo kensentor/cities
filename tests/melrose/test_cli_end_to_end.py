@@ -50,10 +50,10 @@ def run(tmp_path: Path, *argv: str, transport: httpx.BaseTransport | None = None
 def test_collect_then_collect_again_then_rebuild(tmp_path: Path) -> None:
     code, out = run(tmp_path, "collect", transport=site())
     assert code == cli.EXIT_OK, out
-    assert "Documents: 11   new entries: 1959" in out
-    assert "442380 out_of_scope" in out
+    assert "Documents: 11   new entries: 2152" in out
+    assert "442380 loaded" in out
     assert len(list((tmp_path / "melrose" / "raw").glob("*.json"))) == 11
-    assert "Map export: 422 records (349 Stops, 73 Crashes)" in out
+    assert "Map export: 480 records (405 Stops, 75 Crashes)" in out
     collected = without_generated_at(tmp_path)
 
     code, out = run(tmp_path, "collect", transport=site())
@@ -62,12 +62,12 @@ def test_collect_then_collect_again_then_rebuild(tmp_path: Path) -> None:
     code, out = run(tmp_path, "rebuild")
     assert code == cli.EXIT_OK, out
     assert "new entries: 0" in out
-    assert "Stops placed: 331 of 332" in out
+    assert "Stops placed: 385 of 386" in out
     assert "Boundary streets (rule 5)" in out
     assert without_generated_at(tmp_path) == collected, "AC11: rebuild gives the same export, byte for byte"
 
     code, out = run(tmp_path, "export")
-    assert (code, out.strip()) == (cli.EXIT_OK, "Map export: 422 records (349 Stops, 73 Crashes), reference 2026-10-08")
+    assert (code, out.strip()) == (cli.EXIT_OK, "Map export: 480 records (405 Stops, 75 Crashes), reference 2026-10-08")
     assert without_generated_at(tmp_path) == collected
 
     code, out = run(tmp_path, "sample", "--n", "3", "--seed", "7", "--type", "MOTOR VEHICLE STOP")

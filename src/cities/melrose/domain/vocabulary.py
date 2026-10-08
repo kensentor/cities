@@ -13,20 +13,26 @@ import re
 KNOWN_RESULTS: frozenset[str] = frozenset(
     {
         "* Report taken",
+        "Alarm-Medical Device",
         "Building Checked - Secure",
         "Citation/Warning Issued",
         "Could Not Locate",
+        "Extinguished",
         "False Alarm",
         "Field Interrogation",
         "No Action Required",
         "Notification Made",
+        "Notified Agency (Gas,Elec,etc)",
         "Parking Ticket Issued",
         "Peace Restored",
         "Removed Hazard",
+        "Restraining Order Not Served",
         "Restraining Order Served",
+        "Secured Building",
         "Services Rendered",
         "Summons Not Served",
         "Summons Served",
+        "Taken to Family/Guardian/Other",
         "Taken/Referred to Other Agency",
         "Transported to Hospital",
         "Unfounded",
@@ -37,16 +43,24 @@ KNOWN_RESULTS: frozenset[str] = frozenset(
 )
 
 # Results printed cut short in published logs, kept verbatim. Each was seen in a log collected from
-# July 2026 onward; the full form is in KNOWN_RESULTS where it is known.
+# January 2025 onward; the full form is in KNOWN_RESULTS where it is known.
 TRUNCATED_RESULTS: frozenset[str] = frozenset(
     {
+        "*",
         "* Report",
+        "Building Checked -",
         "Citation/Warning",
         "False Alarm/Cancelled Alarm Co",
+        "Notification",
         "Restraining",
         "Restraining Order",
+        "Restraining Order Not",
+        "Services",
+        "Summons",
         "Summons Not",
         "Taken/Referred to Other",
+        "Transported to",
+        "Unit",
     }
 )
 

@@ -7,20 +7,21 @@ from __future__ import annotations
 
 import json
 import random
+from datetime import date
 
 import pytest
-from support import ALL_LOGS, AUG_17, AUG_31, FIXTURES, JUL_13, JUL_20, SEP_7, SEP_14, SEP_21, archived, archived_pdf
+from support import ARCHIVED, AUG_17, AUG_31, FIXTURES, JUL_13, JUL_20, JUN_2018, OCT_2021, SEP_7, SEP_14, SEP_21, archived, archived_pdf
 
 from cities.melrose.adapters.outbound.pdf_reader import PdfLogReader
 from cities.melrose.core.loading import LoadedDocument, load_document
 from cities.melrose.domain.logs import DocumentStatus
 from cities.melrose.domain.reports import NoticeKind
 from cities.melrose.ports.outbound import LogUnreadable
-from cities.melrose.settings import COLLECT_SINCE
+from cities.melrose.settings import COLLECT_SINCE, known_call_types
 
 
 def load(media_id: int) -> LoadedDocument:
-    return load_document(archived(media_id), archived_pdf(media_id), PdfLogReader(), COLLECT_SINCE)
+    return load_document(archived(media_id), archived_pdf(media_id), PdfLogReader(), COLLECT_SINCE, known_call_types())
 
 
 def version(document: LoadedDocument, call_number: str):
@@ -31,15 +32,59 @@ def notices(document: LoadedDocument, kind: NoticeKind) -> list[tuple[str | None
     return [(n.call_number, n.text) for n in document.notices if n.kind is kind]
 
 
-@pytest.mark.parametrize("media_id", ALL_LOGS)
-def test_every_log_since_jul_20_passes_the_completeness_check(media_id: int) -> None:
-    """Phase 1 gate: none quarantined."""
+@pytest.mark.parametrize("media_id", ARCHIVED)
+def test_every_archived_log_passes_the_completeness_check(media_id: int) -> None:
+    """Phase 1 gate, and the backfill's (A16): none quarantined."""
     document = load(media_id)
     assert document.record.status is not DocumentStatus.QUARANTINED, document.record.error
 
 
-def test_the_jul_13_log_uploaded_after_jul_20_is_out_of_scope() -> None:
-    assert load(JUL_13).record.status is DocumentStatus.OUT_OF_SCOPE
+@pytest.mark.parametrize("media_id", [JUN_2018, OCT_2021])
+def test_logs_re_uploaded_from_before_2025_are_out_of_scope(media_id: int) -> None:
+    assert load(media_id).record.status is DocumentStatus.OUT_OF_SCOPE
+
+
+def test_the_jul_13_log_is_in_scope_since_the_backfill() -> None:
+    assert load(JUL_13).record.status is DocumentStatus.LOADED
+
+
+def test_a_call_line_glued_to_an_id_label_or_its_colon_is_its_own_entry() -> None:
+    assert version(load(441855), "25-2176").location_raw == "5 BRAZIL ST"
+    assert version(load(442209), "25-10369").call_type == "HARASSMENT"
+
+
+def test_early_january_call_numbers_count_toward_completeness() -> None:
+    assert version(load(442268), "26-137").call_type == "MVA - Not Investigated"
+
+
+def test_a_heading_printed_as_or_date_or_date_still_dates_its_entries() -> None:
+    assert version(load(442028), "25-6449").date == date(2025, 5, 26)
+    assert version(load(442309), "26-3701").date == date(2026, 4, 1)
+
+
+def test_a_lost_heading_is_restored_at_the_overnight_reset() -> None:
+    document = load(442335)
+    assert (version(document, "26-5501").date, version(document, "26-5516").date) == (date(2026, 5, 11), date(2026, 5, 12))
+    assert notices(document, NoticeKind.INFERRED_DATE) == [("26-5516", "2026-05-12 starts here; its heading is missing")]
+
+
+def test_a_call_type_printed_without_a_result_is_stored_with_an_empty_one() -> None:
+    document = load(442245)
+    assert (version(document, "25-13757").call_type, version(document, "25-13757").result) == ("MISSING PERSON", "")
+    assert ("25-13757", "MISSING PERSON") in notices(document, NoticeKind.MISSING_RESULT)
+
+
+@pytest.mark.parametrize(
+    ("media_id", "call_number", "result"),
+    [
+        (442215, "25-10444", "Transported to"),
+        (442222, "25-11427", "*"),
+        (442450, "26-11569", "Summons"),
+        (442309, "26-3912", "Building Checked -"),
+    ],
+)
+def test_more_results_printed_cut_short_are_kept_as_printed(media_id: int, call_number: str, result: str) -> None:
+    assert version(load(media_id), call_number).result == result
 
 
 def test_ac1_sep_21_27_holds_187_entries() -> None:

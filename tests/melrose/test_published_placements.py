@@ -11,6 +11,7 @@ from cities.melrose.adapters.outbound.gazetteer import SnapshotGazetteer
 from cities.melrose.adapters.outbound.log_archive import FileLogArchive
 from cities.melrose.adapters.outbound.pdf_reader import PdfLogReader
 from cities.melrose.core.rebuild import RebuildService
+from cities.melrose.domain.entries import EntryStatus
 from cities.melrose.domain.places import Placement, PlacementKind
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.domain.streets import ABBREVIATIONS
@@ -50,7 +51,8 @@ def test_ac2_at_least_95_percent_of_stops_with_an_address_or_intersection_are_pl
 
 def test_every_current_entry_has_a_placement(built) -> None:
     repository = built[0]
-    assert {s.call_number for s in repository.entries()} == set(repository.placement_rows)
+    current = {s.call_number for s in repository.entries() if s.status is EntryStatus.CURRENT}
+    assert current == set(repository.placement_rows)
 
 
 def test_ac10_the_pope_entry_shows_only_its_address(built) -> None:

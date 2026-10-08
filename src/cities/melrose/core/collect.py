@@ -55,7 +55,7 @@ class CollectService(CollectLogs):
         loaded: list[LoadedDocument] = []
         for log, pdf, fetched_at in downloads:
             archived = self._archive.keep(log, pdf, fetched_at)
-            document = load_document(archived, pdf, self._reader, since)
+            document = load_document(archived, pdf, self._reader, since, self._known_call_types)
             self._repository.save_document(document.record, document.versions)
             loaded.append(document)
         report = derive_and_report(

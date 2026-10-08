@@ -47,7 +47,7 @@ class RebuildService(RebuildFromArchive):
         self._repository.clear_versions()
         loaded: list[LoadedDocument] = []
         for archived in sorted(self._archive.archived(), key=lambda a: a.log.media_id):
-            document = load_document(archived, self._archive.load(archived), self._reader, self._since)
+            document = load_document(archived, self._archive.load(archived), self._reader, self._since, self._known_call_types)
             self._repository.save_document(document.record, document.versions)
             loaded.append(document)
         report = derive_and_report(

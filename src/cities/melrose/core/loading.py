@@ -21,8 +21,14 @@ class LoadedDocument:
     conflicts: list[str] = field(default_factory=list)
 
 
-def load_document(archived: ArchivedLog, pdf: bytes, reader: LogReader, since: date) -> LoadedDocument:
-    """Read one log and decide whether its entries load, are out of scope, or are quarantined."""
+def load_document(
+    archived: ArchivedLog, pdf: bytes, reader: LogReader, since: date, known_call_types: Collection[str]
+) -> LoadedDocument:
+    """Read one log and decide whether its entries load, are out of scope, or are quarantined.
+
+    Scope is settled from the dates alone, before any entry is interpreted, so a log from before
+    collection starts is out of scope whether or not its entries parse.
+    """
     media_id = archived.log.media_id
     try:
         read = reader.read(pdf)
@@ -33,14 +39,19 @@ def load_document(archived: ArchivedLog, pdf: bytes, reader: LogReader, since: d
     try:
         dates = rules.assign_dates(read.entries, read.declared_from)
         first_date, last_date = min(dates), max(dates)
-        interpreted = rules.interpret(read.entries, dates, media_id)
+        if last_date < since:
+            return LoadedDocument(DocumentRecord(archived, first_date, last_date, DocumentStatus.OUT_OF_SCOPE), [], notices)
+        dates, starts = rules.restore_lost_headings(read.entries, dates)
+        notices += [
+            Notice(media_id, read.entries[i].call_number, NoticeKind.INFERRED_DATE, f"{dates[i]} starts here; its heading is missing")
+            for i in starts
+        ]
+        interpreted = rules.interpret(read.entries, dates, media_id, known_call_types)
         rules.check_complete(interpreted.versions, read.call_numbers_in_text, interpreted.inferred)
     except rules.DocumentRejected as exc:
         conflicts = _duplicates(read.entries)
         record = DocumentRecord(archived, first_date, last_date, DocumentStatus.QUARANTINED, str(exc))
         return LoadedDocument(record, [], notices, conflicts)
-    if last_date < since:
-        return LoadedDocument(DocumentRecord(archived, first_date, last_date, DocumentStatus.OUT_OF_SCOPE), [], notices)
     record = DocumentRecord(archived, first_date, last_date, DocumentStatus.LOADED)
     return LoadedDocument(record, interpreted.versions, notices + interpreted.notices)
 

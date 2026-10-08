@@ -67,13 +67,15 @@ def test_r10_no_word_of_any_published_location_reaches_the_export_unless_it_name
     is also in the result "Transported to Hospital", and "UNIT" in "Unit Clear"."""
     streets = {w for name in GAZETTEER.street_names() for w in f"{name} {abbreviate(name)}".split()}
     location_words = {w.upper() for v in built.current for w in WORD.findall(v.location_raw or "")} - streets
+    # Values only: key names such as "time" and "generated_at" are not shown, and a label word like
+    # "TIME" (CHIME TIME CHILDREN'S CENTER) would otherwise match them.
     open_text = json.dumps(
-        {
-            "generated_at": built.export["generated_at"],
-            "reference_version": built.export["reference_version"],
-            "records": [{k: r[k] for k in ("call", "date", "time", "address", "streets", "wards")} for r in built.export["records"]],
-            "documents": [{k: d[k] for k in ("first_date", "last_date")} for d in built.export["documents"]],
-        }
+        [
+            built.export["generated_at"],
+            built.export["reference_version"],
+            [[r[k] for k in ("call", "date", "time", "address", "streets", "wards")] for r in built.export["records"]],
+            [[d[k] for k in ("first_date", "last_date")] for d in built.export["documents"]],
+        ]
     )
     shown = {w.upper() for w in WORD.findall(open_text)}
     assert location_words, "the search must have words to look for"
@@ -104,7 +106,7 @@ def test_ac5_every_current_entry_of_a_listed_call_type_is_exported_and_nothing_e
     listed = {t for c in categories() for t in c.call_types}
     expected = sorted(v.call_number for v in built.current if v.call_type in listed)
     assert sorted(r["call"] for r in built.export["records"]) == expected
-    assert len(expected) == 422
+    assert len(expected) == 5064
 
 
 def test_a_record_is_on_the_map_exactly_when_it_has_an_address_a_point_and_one_to_three_wards(built: Built) -> None:
