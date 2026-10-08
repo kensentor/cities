@@ -43,7 +43,7 @@ npm run typecheck
 npm run build      # site/dist, a static site including the export
 ```
 
-The page loads the export once and does all filtering and counting in the browser, in `src/aggregate.ts`, which uses neither Leaflet nor the DOM. Markers and the "not on the map" counts follow every filter. The ward table and street ranking have their own categories, so the Show checkboxes don't apply to them; the date range applies to both of the ward table's columns, and the result filter to stops only (design R6).
+The page loads the export once and does all filtering and counting in the browser, in `src/aggregate.ts`, which uses neither Leaflet nor the DOM. Markers and the "not on the map" counts follow every filter. The ward table and street ranking have their own categories, so the Show checkboxes don't apply to them; the date range applies to both of the ward table's columns, and the stop results ticked beneath Stops to stops only (design R6). An inverted date range shows an error and leaves the map and tables on the last valid range (design AC4a).
 
 What the export may carry is decided in `core/publishing.py`: only current entries of the listed call types; any arrest result as "Arrest"; a result printed cut short as its one full form, where it has one; the address rebuilt from the house number and reference street, and only for an entry on the map. An entry outside Melrose counts toward no street.
 
