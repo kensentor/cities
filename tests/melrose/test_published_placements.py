@@ -14,8 +14,8 @@ from cities.melrose.core.rebuild import RebuildService
 from cities.melrose.domain.places import Placement, PlacementKind
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.domain.streets import ABBREVIATIONS
-from cities.melrose.settings import BOUNDARY_RULE, COLLECT_SINCE, known_call_types
-from cities.melrose.stubs import FakeClock, InMemoryEntryRepository
+from cities.melrose.settings import BOUNDARY_RULE, COLLECT_SINCE, categories, known_call_types
+from cities.melrose.stubs import FakeClock, InMemoryEntryRepository, InMemoryMapPublisher
 
 GAZETTEER = SnapshotGazetteer(REPO / "data" / "melrose" / "reference", BOUNDARY_RULE)
 
@@ -28,9 +28,11 @@ def built() -> tuple[InMemoryEntryRepository, RunReport]:
         archive=FileLogArchive(RAW),
         repository=repository,
         gazetteer=GAZETTEER,
+        publisher=InMemoryMapPublisher(),
         clock=FakeClock(),
         since=COLLECT_SINCE,
         known_call_types=known_call_types(),
+        categories=categories(),
     ).rebuild()
     return repository, report
 

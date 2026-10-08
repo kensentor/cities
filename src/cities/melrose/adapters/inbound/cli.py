@@ -1,7 +1,7 @@
 """The `cities melrose` subcommands: parse arguments, call one use case, print what it found.
 
 Exit codes: 0 success; 1 some documents were quarantined (the rest still loaded); 2 a network or
-HTTP failure (nothing written); 3 a local storage failure.
+HTTP failure (nothing written); 3 a local storage failure, or stored state that cannot be exported.
 """
 
 from __future__ import annotations
@@ -15,8 +15,16 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TextIO
 
+from cities.melrose.domain.public import ExportSummary
 from cities.melrose.domain.reports import NoticeKind, PlacementSummary, RunReport
-from cities.melrose.ports.inbound import CollectLogs, FetchReference, RebuildFromArchive, SamplePlacements
+from cities.melrose.ports.inbound import (
+    CollectLogs,
+    ExportMap,
+    ExportRefused,
+    FetchReference,
+    RebuildFromArchive,
+    SamplePlacements,
+)
 from cities.melrose.ports.outbound import LogSourceUnavailable, ReferenceSourceUnavailable, StorageFailed
 
 EXIT_OK, EXIT_QUARANTINED, EXIT_NETWORK, EXIT_STORAGE = 0, 1, 2, 3
@@ -30,6 +38,7 @@ class UseCases:
     rebuild: Callable[[], AbstractContextManager[RebuildFromArchive]]
     fetch_reference: Callable[[], AbstractContextManager[FetchReference]]
     sample: Callable[[], AbstractContextManager[SamplePlacements]]
+    export: Callable[[], AbstractContextManager[ExportMap]]
 
 
 def run(argv: Sequence[str], use_cases: UseCases, out: TextIO) -> int:
@@ -42,6 +51,10 @@ def run(argv: Sequence[str], use_cases: UseCases, out: TextIO) -> int:
             case "rebuild":
                 with use_cases.rebuild() as service:
                     return _print_run(service.rebuild(), out, boundary=True)
+            case "export":
+                with use_cases.export() as service:
+                    print(_export_line(service.export()), file=out)
+                return EXIT_OK
             case "sample":
                 seed = args.seed if args.seed is not None else random.SystemRandom().randrange(10**6)
                 with use_cases.sample() as service:
@@ -69,6 +82,9 @@ def run(argv: Sequence[str], use_cases: UseCases, out: TextIO) -> int:
     except StorageFailed as exc:
         print(f"storage failure: {exc}", file=out)
         return EXIT_STORAGE
+    except ExportRefused as exc:
+        print(f"export refused: {exc}", file=out)
+        return EXIT_STORAGE
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -77,6 +93,7 @@ def _parser() -> argparse.ArgumentParser:
     collect = commands.add_parser("collect", help="download new logs and load their entries")
     collect.add_argument("--since", type=date.fromisoformat, default=None, help="earliest upload date (YYYY-MM-DD)")
     commands.add_parser("rebuild", help="re-read every archived log and derive everything again")
+    commands.add_parser("export", help="write the map page's data again, after a change to categories.toml")
     commands.add_parser("fetch-reference", help="replace the snapshot of the reference layers")
     sample = commands.add_parser("sample", help="print random placed entries to check against a map")
     sample.add_argument("--n", type=int, default=20)
@@ -117,6 +134,8 @@ def _print_run(report: RunReport, out: TextIO, *, boundary: bool = False) -> int
                 line(f"  {notice.media_id} {notice.call_number or '(no call number)'} {notice.kind.value}: {first_line}")
     if report.placement is not None:
         _print_placement(report.placement, line, boundary=boundary or report.wrote)
+    if report.exported is not None:
+        line(_export_line(report.exported))
     return EXIT_QUARANTINED if report.quarantined else EXIT_OK
 
 
@@ -134,6 +153,11 @@ def _print_placement(summary: PlacementSummary, line: Callable[[str], None], *, 
         line("Boundary streets (rule 5): street, ward pair, placed entries near the edge, counted toward both wards")
         for row in summary.boundary:
             line(f"  {row.street:<24} {'/'.join(row.wards):<4} near {row.near:>3}  counted {row.counted:>3}")
+
+
+def _export_line(summary: ExportSummary) -> str:
+    counts = ", ".join(f"{n} {label}" for label, n in summary.counts)
+    return f"Map export: {summary.records} records ({counts}), reference {summary.reference_version}"
 
 
 def _listing(line: Callable[[str], None], title: str, items: Sequence[str]) -> None:

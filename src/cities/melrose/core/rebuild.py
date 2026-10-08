@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
+from dataclasses import replace
 from datetime import date
 
 from cities.melrose.core.loading import LoadedDocument, Snapshot, derive_and_report, load_document
+from cities.melrose.core.publishing import publish_map
+from cities.melrose.domain.public import Category, ExportSummary
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.ports.inbound import RebuildFromArchive
-from cities.melrose.ports.outbound import Clock, EntryRepository, Gazetteer, LogArchive, LogReader
+from cities.melrose.ports.outbound import Clock, EntryRepository, Gazetteer, LogArchive, LogReader, MapPublisher
 
 
 class RebuildService(RebuildFromArchive):
-    __slots__ = ("_archive", "_clock", "_gazetteer", "_known_call_types", "_reader", "_repository", "_since")
+    __slots__ = ("_archive", "_categories", "_clock", "_gazetteer", "_known_call_types", "_publisher", "_reader", "_repository", "_since")
 
     def __init__(
         self,
@@ -21,17 +24,21 @@ class RebuildService(RebuildFromArchive):
         archive: LogArchive,
         repository: EntryRepository,
         gazetteer: Gazetteer,
+        publisher: MapPublisher,
         clock: Clock,
         since: date,
         known_call_types: Collection[str],
+        categories: Sequence[Category],
     ) -> None:
         self._reader = reader
         self._archive = archive
         self._repository = repository
         self._gazetteer = gazetteer
+        self._publisher = publisher
         self._clock = clock
         self._since = since
         self._known_call_types = known_call_types
+        self._categories = categories
 
     def rebuild(self) -> RunReport:
         started_at = self._clock.now()
@@ -55,5 +62,9 @@ class RebuildService(RebuildFromArchive):
             loaded=loaded,
             wrote=True,
         )
+        report = replace(report, exported=self._publish())
         self._repository.record_run(report)
         return report
+
+    def _publish(self) -> ExportSummary:
+        return publish_map(self._repository, self._gazetteer, self._publisher, self._categories, self._clock)

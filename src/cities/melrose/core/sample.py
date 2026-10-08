@@ -5,7 +5,8 @@ from __future__ import annotations
 import random
 from collections.abc import Collection, Sequence
 
-from cities.melrose.domain.entries import EntryStatus, EntryVersion
+from cities.melrose.core import rules
+from cities.melrose.domain.entries import EntryVersion
 from cities.melrose.domain.places import Placement, PlacementKind
 from cities.melrose.ports.inbound import SamplePlacements
 from cities.melrose.ports.outbound import EntryRepository
@@ -18,10 +19,7 @@ class SampleService(SamplePlacements):
         self._repository = repository
 
     def sample(self, n: int, seed: int, call_types: Collection[str] = ()) -> Sequence[tuple[EntryVersion, Placement]]:
-        shown = {
-            (s.call_number, s.current_document_id) for s in self._repository.entries() if s.status is EntryStatus.CURRENT
-        }
-        current = {v.call_number: v for v in self._repository.versions() if (v.call_number, v.document_id) in shown}
+        current = {v.call_number: v for v in rules.current_versions(self._repository.entries(), self._repository.versions())}
         placed = [
             (current[p.call_number], p)
             for p in self._repository.placements()

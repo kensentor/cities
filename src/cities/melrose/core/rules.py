@@ -200,6 +200,12 @@ def current_entries(documents: Iterable[DocumentRecord], versions: Iterable[Entr
     return states
 
 
+def current_versions(states: Iterable[EntryState], versions: Iterable[EntryVersion]) -> list[EntryVersion]:
+    """The version shown for each current entry; withdrawn entries have none."""
+    shown = {(s.call_number, s.current_document_id) for s in states if s.status is EntryStatus.CURRENT}
+    return [v for v in versions if (v.call_number, v.document_id) in shown]
+
+
 def differing_versions(versions: Iterable[EntryVersion]) -> set[str]:
     """Call numbers whose versions disagree on any published field."""
     seen: dict[str, set[tuple[object, ...]]] = defaultdict(set)

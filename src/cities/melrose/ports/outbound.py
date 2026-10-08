@@ -14,6 +14,7 @@ from typing import Protocol
 from cities.melrose.domain.entries import EntryState, EntryVersion, ReadLog
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, PublishedLog
 from cities.melrose.domain.places import Located, Placement, Point, StreetRef, WardSurroundings
+from cities.melrose.domain.public import PublicExport, WardOutline
 from cities.melrose.domain.reference import LayerSnapshot, ReferenceLayer
 from cities.melrose.domain.reports import RunReport
 
@@ -158,6 +159,20 @@ class Gazetteer(Protocol):
 
     @abstractmethod
     def wards_around(self, point: Point, streets: Sequence[str]) -> WardSurroundings: ...
+
+    @abstractmethod
+    def ward_outlines(self) -> Sequence[WardOutline]:
+        """The wards as `wards_around` sees them, in WGS84, ordered by ward."""
+
+
+class MapPublisher(Protocol):
+    """Publish what the map page may show. The export arrives finished: choosing records and
+    fields is the core's job, so a publisher only serialises."""
+
+    __slots__ = ()
+
+    @abstractmethod
+    def publish(self, export: PublicExport) -> None: ...
 
 
 class Clock(Protocol):

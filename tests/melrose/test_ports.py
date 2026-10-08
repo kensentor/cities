@@ -14,16 +14,18 @@ import pytest
 from cities.melrose.adapters.outbound.arcgis import ArcGisReferenceSource
 from cities.melrose.adapters.outbound.clock import SystemClock
 from cities.melrose.adapters.outbound.gazetteer import SnapshotGazetteer
+from cities.melrose.adapters.outbound.json_publisher import JsonMapPublisher
 from cities.melrose.adapters.outbound.log_archive import FileLogArchive
 from cities.melrose.adapters.outbound.pdf_reader import PdfLogReader
 from cities.melrose.adapters.outbound.reference_files import GeoJsonReferenceStore
 from cities.melrose.adapters.outbound.sqlite_repo import SqliteEntryRepository
 from cities.melrose.adapters.outbound.wordpress import WordPressLogSource
 from cities.melrose.core.collect import CollectService
+from cities.melrose.core.export import ExportService
 from cities.melrose.core.rebuild import RebuildService
 from cities.melrose.core.reference import FetchReferenceService
 from cities.melrose.core.sample import SampleService
-from cities.melrose.ports.inbound import CollectLogs, FetchReference, RebuildFromArchive, SamplePlacements
+from cities.melrose.ports.inbound import CollectLogs, ExportMap, FetchReference, RebuildFromArchive, SamplePlacements
 from cities.melrose.ports.outbound import (
     Clock,
     EntryRepository,
@@ -31,6 +33,7 @@ from cities.melrose.ports.outbound import (
     LogArchive,
     LogReader,
     LogSource,
+    MapPublisher,
     ReferenceSource,
     ReferenceStore,
 )
@@ -40,6 +43,7 @@ from cities.melrose.stubs import (
     InMemoryGazetteer,
     InMemoryLogArchive,
     InMemoryLogSource,
+    InMemoryMapPublisher,
     InMemoryReferenceSource,
     InMemoryReferenceStore,
     ScriptedLogReader,
@@ -50,6 +54,7 @@ PORTS: list[type] = [
     RebuildFromArchive,
     FetchReference,
     SamplePlacements,
+    ExportMap,
     LogSource,
     LogReader,
     LogArchive,
@@ -57,6 +62,7 @@ PORTS: list[type] = [
     ReferenceSource,
     ReferenceStore,
     Gazetteer,
+    MapPublisher,
     Clock,
 ]
 
@@ -65,6 +71,7 @@ IMPLEMENTERS: list[tuple[type, type]] = [
     (RebuildService, RebuildFromArchive),
     (FetchReferenceService, FetchReference),
     (SampleService, SamplePlacements),
+    (ExportService, ExportMap),
     (WordPressLogSource, LogSource),
     (InMemoryLogSource, LogSource),
     (PdfLogReader, LogReader),
@@ -79,6 +86,8 @@ IMPLEMENTERS: list[tuple[type, type]] = [
     (InMemoryReferenceStore, ReferenceStore),
     (SnapshotGazetteer, Gazetteer),
     (InMemoryGazetteer, Gazetteer),
+    (JsonMapPublisher, MapPublisher),
+    (InMemoryMapPublisher, MapPublisher),
     (SystemClock, Clock),
     (FakeClock, Clock),
 ]

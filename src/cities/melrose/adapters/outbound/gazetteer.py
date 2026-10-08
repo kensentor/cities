@@ -23,6 +23,7 @@ from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
 from cities.melrose.domain.places import BoundaryThresholds, Located, NearEdge, Point, StreetRef, WardSurroundings
+from cities.melrose.domain.public import WardOutline
 from cities.melrose.ports.outbound import Gazetteer, StorageFailed
 
 # Appendix C rule 3: the nearest number on the same side of the street, within this many numbers.
@@ -113,6 +114,25 @@ class SnapshotGazetteer(Gazetteer):
                     break
             near.append(NearEdge(pair, along))
         return WardSurroundings(containing, tuple(near))
+
+    def ward_outlines(self) -> Sequence[WardOutline]:
+        data = self._data()
+        outlines = []
+        for ward in sorted(data.wards, key=int):
+            shape_m = data.wards[ward]
+            polygons = getattr(shape_m, "geoms", [shape_m])
+            rings = tuple(
+                tuple(self._ring(ring) for ring in (polygon.exterior, *polygon.interiors)) for polygon in polygons
+            )
+            # A point inside the ward even when its shape is concave, unlike the centre of its bounds.
+            inside = shape_m.representative_point()
+            outlines.append(WardOutline(ward, rings, self._degrees(inside)))
+        return outlines
+
+    def _ring(self, ring: BaseGeometry) -> tuple[tuple[float, float], ...]:
+        xs, ys = np.asarray(ring.coords).T
+        lons, lats = self._data().to_degrees.transform(xs, ys)
+        return tuple((round(float(lon), 6), round(float(lat), 6)) for lon, lat in zip(lons, lats, strict=True))
 
     def _address_point(self, street: StreetRef) -> tuple[shapely.Point | None, str]:
         number = street.number

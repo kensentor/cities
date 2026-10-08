@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 from cities.melrose.domain.entries import EntryState, EntryVersion, ReadLog
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, PublishedLog
 from cities.melrose.domain.places import Located, NearEdge, Placement, Point, StreetRef, WardSurroundings
+from cities.melrose.domain.public import PublicExport, WardOutline
 from cities.melrose.domain.reference import LayerSnapshot, ReferenceLayer
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.ports.outbound import (
@@ -21,6 +22,7 @@ from cities.melrose.ports.outbound import (
     LogSource,
     LogSourceUnavailable,
     LogUnreadable,
+    MapPublisher,
     ReferenceSource,
     ReferenceStore,
 )
@@ -173,6 +175,7 @@ class InMemoryGazetteer(Gazetteer):
     near_edges: dict[Point, tuple[NearEdge, ...]] = field(default_factory=dict)
     outside: dict[Point, float] = field(default_factory=dict)
     extra_streets: frozenset[str] = frozenset()
+    outlines: tuple[WardOutline, ...] = ()
     version: str = "2026-10-08"
 
     def reference_version(self) -> str:
@@ -195,6 +198,22 @@ class InMemoryGazetteer(Gazetteer):
     def wards_around(self, point: Point, streets: Sequence[str]) -> WardSurroundings:
         edges = tuple(e if e.along is None or e.along in streets else NearEdge(e.wards, None) for e in self.near_edges.get(point, ()))
         return WardSurroundings(self.ward_of.get(point), edges)
+
+
+    def ward_outlines(self) -> Sequence[WardOutline]:
+        return self.outlines
+
+
+class InMemoryMapPublisher(MapPublisher):
+    """Keeps every export it is given, latest last."""
+
+    __slots__ = ("exports",)
+
+    def __init__(self) -> None:
+        self.exports: list[PublicExport] = []
+
+    def publish(self, export: PublicExport) -> None:
+        self.exports.append(export)
 
 
 class FakeClock(Clock):

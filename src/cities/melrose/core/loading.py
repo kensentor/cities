@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from cities.melrose.core import placing, rules
-from cities.melrose.domain.entries import EntryState, EntryStatus, EntryVersion, RawEntry
+from cities.melrose.domain.entries import EntryStatus, EntryVersion, RawEntry
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, DocumentStatus
 from cities.melrose.domain.reports import Notice, NoticeKind, RunReport
 from cities.melrose.ports.outbound import EntryRepository, Gazetteer, LogReader, LogUnreadable
@@ -91,7 +91,7 @@ def derive_and_report(
     if wrote:
         repository.replace_entries(rules.current_entries(documents, versions))
     states = repository.entries()
-    current = _current_versions(states, versions)
+    current = rules.current_versions(states, versions)
     if wrote:
         repository.replace_placements(placing.place_all(current, gazetteer))
     loaded_last = [d.last_date for d in documents if d.status is DocumentStatus.LOADED and d.last_date is not None]
@@ -115,7 +115,3 @@ def derive_and_report(
         placement=placing.summarise(repository.placements(), current),
     )
 
-
-def _current_versions(states: Sequence[EntryState], versions: Sequence[EntryVersion]) -> list[EntryVersion]:
-    shown = {(s.call_number, s.current_document_id) for s in states if s.status is EntryStatus.CURRENT}
-    return [v for v in versions if (v.call_number, v.document_id) in shown]

@@ -8,14 +8,16 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
-from support import published
+from support import FIXTURES, published
 
+from cities.melrose.adapters.outbound.json_publisher import JsonMapPublisher
 from cities.melrose.adapters.outbound.log_archive import FileLogArchive
 from cities.melrose.adapters.outbound.reference_files import GeoJsonReferenceStore
 from cities.melrose.adapters.outbound.sqlite_repo import SqliteEntryRepository
 from cities.melrose.domain.entries import EntryState, EntryStatus, EntryVersion
 from cities.melrose.domain.logs import ArchivedLog, DocumentRecord, DocumentStatus
 from cities.melrose.domain.places import LocationForm, NearEdge, Placement, PlacementKind, Point
+from cities.melrose.domain.public import Category, PublicDocument, PublicExport, PublicRecord, WardOutline
 from cities.melrose.domain.reference import LayerSnapshot, ReferenceLayer
 from cities.melrose.domain.reports import RunReport
 from cities.melrose.ports.outbound import StorageFailed
@@ -109,3 +111,58 @@ def test_a_database_from_another_schema_version_must_be_rebuilt(tmp_path: Path) 
         db.execute("PRAGMA user_version = 99")
     with pytest.raises(StorageFailed, match="run rebuild"):
         SqliteEntryRepository.open(path)
+
+
+SAMPLE_EXPORT = PublicExport(
+    generated_at=datetime(2026, 10, 8, 12, tzinfo=UTC),
+    reference_version="2026-10-08",
+    categories=(Category("stops", "Stops", ("MOTOR VEHICLE STOP",)), Category("crashes", "Crashes", ("MOTOR VEHICLE ACCIDENT",))),
+    documents=(PublicDocument("https://example.test/sep-21.pdf", date(2026, 9, 21), date(2026, 9, 27)),),
+    records=(
+        PublicRecord("26-11102", date(2026, 9, 21), "0858", "stops", "MOTOR VEHICLE STOP", "Citation/Warning Issued",
+                     "752 FRANKLIN ST @ 8 GARDEN ST", False, PlacementKind.INTERSECTION, Point(-71.07, 42.46),
+                     ("Franklin St", "Garden St"), ("1", "4"), 0, 12),
+        PublicRecord("26-11103", date(2026, 9, 21), "0915", "stops", "MOTOR VEHICLE STOP", "Verbal Warning",
+                     None, True, PlacementKind.STREET_ONLY, None, ("Franklin St",), (), 0, 12),
+        PublicRecord("26-11120", date(2026, 9, 22), "1730", "crashes", "MOTOR VEHICLE ACCIDENT", "* Report taken",
+                     "744 LYNN FELLS PKWY", False, PlacementKind.ADDRESS, Point(-71.06, 42.47), ("Lynn Fells Pkwy",), ("2",), 0, 13),
+    ),
+    wards=(WardOutline("1", ((((-71.08, 42.46), (-71.07, 42.46), (-71.07, 42.47), (-71.08, 42.46)),),), Point(-71.075, 42.463)),),
+)
+# Technical spec Appendix D: the contract with the page's types.ts. A key added here without the
+# spec and types.ts would be a field the page never checked, so the sets are pinned exactly.
+EXPORT_KEYS = {"generated_at", "reference_version", "categories", "documents", "records"}
+RECORD_KEYS = {"call", "date", "time", "category", "type", "result", "address", "vicinity", "kind", "lat", "lon", "streets", "wards", "doc", "page"}
+GOLDEN_EXPORT = FIXTURES / "golden" / "export_sample.json"
+
+
+def test_the_export_file_has_exactly_the_appendix_d_shape(tmp_path: Path) -> None:
+    JsonMapPublisher(tmp_path).publish(SAMPLE_EXPORT)
+    written = json.loads((tmp_path / "entries.json").read_text())
+    assert set(written) == EXPORT_KEYS
+    assert [set(c) for c in written["categories"]] == [{"key", "label"}] * 2
+    assert set(written["documents"][0]) == {"url", "first_date", "last_date"}
+    assert all(set(r) == RECORD_KEYS for r in written["records"])
+
+
+def test_the_export_file_matches_the_golden_file_the_page_tests_read(tmp_path: Path) -> None:
+    """site/tests/aggregate.test.ts reads the same golden file, so both sides pin one contract."""
+    JsonMapPublisher(tmp_path).publish(SAMPLE_EXPORT)
+    assert (tmp_path / "entries.json").read_text() == GOLDEN_EXPORT.read_text()
+
+
+def test_the_wards_file_is_one_labelled_multipolygon_per_ward(tmp_path: Path) -> None:
+    JsonMapPublisher(tmp_path).publish(SAMPLE_EXPORT)
+    wards = json.loads((tmp_path / "wards.geojson").read_text())
+    (feature,) = wards["features"]
+    assert feature["properties"] == {"ward": "1", "label": [-71.075, 42.463]}
+    assert feature["geometry"]["type"] == "MultiPolygon"
+    assert feature["geometry"]["coordinates"][0][0][0] == [-71.08, 42.46]
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_an_export_directory_that_cannot_be_written_is_a_storage_failure(tmp_path: Path) -> None:
+    blocked = tmp_path / "file"
+    blocked.write_text("")
+    with pytest.raises(StorageFailed):
+        JsonMapPublisher(blocked / "melrose").publish(SAMPLE_EXPORT)

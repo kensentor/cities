@@ -7,6 +7,7 @@ from datetime import date, datetime
 from enum import StrEnum
 
 from cities.melrose.domain.logs import DocumentRecord
+from cities.melrose.domain.public import ExportSummary
 
 
 class NoticeKind(StrEnum):
@@ -84,3 +85,5 @@ class RunReport:
     # False when the run found nothing new and wrote nothing.
     wrote: bool = True
     placement: PlacementSummary | None = None
+    # What the map page was given; None when nothing was written.
+    exported: ExportSummary | None = None

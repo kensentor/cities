@@ -9,8 +9,13 @@ from typing import Protocol
 
 from cities.melrose.domain.entries import EntryVersion
 from cities.melrose.domain.places import Placement
+from cities.melrose.domain.public import ExportSummary
 from cities.melrose.domain.reference import ReferenceReport
 from cities.melrose.domain.reports import RunReport
+
+
+class ExportRefused(Exception):
+    """The stored state cannot be exported as it is; the message says which command fixes it."""
 
 
 class CollectLogs(Protocol):
@@ -48,3 +53,12 @@ class SamplePlacements(Protocol):
     @abstractmethod
     def sample(self, n: int, seed: int, call_types: Collection[str] = ()) -> Sequence[tuple[EntryVersion, Placement]]:
         """`call_types` limits the sample to those call types; empty means every placed entry."""
+
+
+class ExportMap(Protocol):
+    """Write the map page's data from what is stored, after a change to categories.toml."""
+
+    __slots__ = ()
+
+    @abstractmethod
+    def export(self) -> ExportSummary: ...

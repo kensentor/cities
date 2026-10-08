@@ -1,0 +1,12 @@
+# Which call types the map shows, grouped into categories (technical spec, Data model). Only these
+# call types leave SQLite. After editing, run `uv run cities melrose export`.
+# The page's ward table and street ranking read the `stops` and `crashes` keys; any further
+# category appears only as a map layer and a filter option.
+
+[stops]
+label = "Stops"
+call_types = ["MOTOR VEHICLE STOP"]
+
+[crashes]
+label = "Crashes"
+call_types = ["MOTOR VEHICLE ACCIDENT", "ACCIDENT HIT & RUN", "MVA - Not Investigated"]

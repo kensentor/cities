@@ -63,9 +63,10 @@ exhaustive = true
 name = "Inside the core: independent use cases over loading over the rules"
 type = "layers"
 # The use cases never import one another. What collect and rebuild share is `loading`, which
-# places entries through `placing`; below that sit the pure rules and the location parser.
+# places entries through `placing`, and `publishing`, which builds the map export and which
+# `export` uses alone; below that sit the pure rules and the location parser.
 containers = ["cities.melrose.core"]
-layers = ["collect | rebuild | reference | sample", "loading", "placing", "rules | locations"]
+layers = ["collect | rebuild | reference | sample | export", "loading | publishing", "placing", "rules | locations"]
 exhaustive = true
 
 [[tool.importlinter.contracts]]

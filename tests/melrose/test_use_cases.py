@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
 import pytest
 from support import entry, published, read_log
 
 from cities.melrose.core.collect import CollectService
+from cities.melrose.core.export import ExportService
 from cities.melrose.core.rebuild import RebuildService
 from cities.melrose.core.reference import FetchReferenceService
 from cities.melrose.domain.entries import EntryStatus, ReadLog, SegmentKind
 from cities.melrose.domain.logs import DocumentStatus, PublishedLog
+from cities.melrose.domain.public import Category
 from cities.melrose.domain.reference import ReferenceLayer
 from cities.melrose.ports.outbound import LogSourceUnavailable, ReferenceSourceUnavailable, StorageFailed
 from cities.melrose.stubs import (
@@ -20,6 +23,7 @@ from cities.melrose.stubs import (
     InMemoryGazetteer,
     InMemoryLogArchive,
     InMemoryLogSource,
+    InMemoryMapPublisher,
     InMemoryReferenceSource,
     InMemoryReferenceStore,
     ScriptedLogReader,
@@ -27,6 +31,7 @@ from cities.melrose.stubs import (
 
 SINCE = date(2026, 7, 20)
 KNOWN_TYPES = frozenset({"MOTOR VEHICLE STOP", "MEDICAL EMERGENCY"})
+CATEGORIES = (Category("stops", "Stops", ("MOTOR VEHICLE STOP",)), Category("crashes", "Crashes", ("MOTOR VEHICLE ACCIDENT",)))
 
 WEEK_1 = read_log(entry("26-1", date(2026, 7, 20)), entry("26-2", date(2026, 7, 21), "MEDICAL EMERGENCY Unit Clear"))
 WEEK_0 = read_log(entry("26-0", date(2026, 7, 13)))  # uploaded late, covers only earlier dates
@@ -39,6 +44,7 @@ class World:
         self.archive = InMemoryLogArchive()
         self.repository = InMemoryEntryRepository()
         self.gazetteer = InMemoryGazetteer()
+        self.publisher = InMemoryMapPublisher()
 
     def collect(self) -> CollectService:
         return CollectService(
@@ -47,9 +53,11 @@ class World:
             archive=self.archive,
             repository=self.repository,
             gazetteer=self.gazetteer,
+            publisher=self.publisher,
             clock=FakeClock(),
             since=SINCE,
             known_call_types=KNOWN_TYPES,
+            categories=CATEGORIES,
         )
 
     def rebuild(self, repository: InMemoryEntryRepository | None = None) -> RebuildService:
@@ -58,9 +66,11 @@ class World:
             archive=self.archive,
             repository=repository or self.repository,
             gazetteer=self.gazetteer,
+            publisher=self.publisher,
             clock=FakeClock(),
             since=SINCE,
             known_call_types=KNOWN_TYPES,
+            categories=CATEGORIES,
         )
 
 
@@ -81,6 +91,7 @@ def test_collecting_again_writes_nothing() -> None:
     writes = world.repository.writes
     report = world.collect().collect()
     assert (report.wrote, world.repository.writes, world.source.fetched) == (False, writes, [11])
+    assert (len(world.publisher.exports), report.exported) == (1, None), "a second collect publishes nothing either"
 
 
 def test_a_failed_download_writes_nothing() -> None:
@@ -134,6 +145,20 @@ def test_rebuild_from_the_archive_equals_incremental_collection() -> None:
     assert fresh.entries() == world.repository.entries()
     assert fresh.placements() == world.repository.placements()
     assert len(fresh.placements()) == 2
+    incremental, rebuilt = world.publisher.exports
+    assert replace(rebuilt, generated_at=incremental.generated_at) == incremental
+    assert [r.call for r in rebuilt.records] == ["26-1"], "only the stop is a listed call type"
+
+
+def test_export_publishes_from_what_is_stored_without_collecting() -> None:
+    world = World({published(11, date(2026, 7, 29)): (b"w1", WEEK_1)})
+    world.collect().collect()
+    summary = ExportService(
+        repository=world.repository, gazetteer=world.gazetteer, publisher=world.publisher, clock=FakeClock(), categories=CATEGORIES
+    ).export()
+    assert (summary.counts, summary.records) == ((("Stops", 1), ("Crashes", 0)), 1)
+    assert world.publisher.exports[-1].records == world.publisher.exports[0].records
+    assert world.source.fetched == [11]
 
 
 def test_a_missing_reference_snapshot_writes_nothing() -> None:
