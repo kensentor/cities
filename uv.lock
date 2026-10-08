@@ -183,6 +183,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
+    { name = "numpy" },
     { name = "pdfplumber" },
     { name = "pyproj" },
     { name = "shapely" },
@@ -198,6 +199,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "numpy", specifier = ">=2" },
     { name = "pdfplumber", specifier = ">=0.11.10" },
     { name = "pyproj", specifier = ">=3.8.0" },
     { name = "shapely", specifier = ">=2.1.2" },
