@@ -1,6 +1,6 @@
 # Melrose traffic stops map — technical spec
 
-- **Status:** Approved by Ken Hoffmann, 2026-10-07. Revised the same day during phase 1: build details, experiment E9, and requirements feedback A7–A8, which Ken answered the same day. Revised again during phase 2: placement details, experiment E10, Appendix C rules 1–4, and requirements feedback A9, which awaits Ken's response.
+- **Status:** Approved by Ken Hoffmann, 2026-10-07. Revised the same day during phase 1: build details, experiment E9, and requirements feedback A7–A8, which Ken answered the same day. Revised again during phase 2: placement details, experiment E10, Appendix C rules 1–4, and requirements feedback A9, which awaits Ken's response. Phase 2 gate passed, Ken Hoffmann, 2026-10-07: AC2 at 99.7%, AC3's 20-entry sample (seed 2026) and the boundary streets accepted, closing Q2.
 - **Date:** 2026-10-03, revised 2026-10-07
 - **Author:** Ken Hoffmann
 - **Requirements:** [design.md](design.md), owner Ken Hoffmann, approved 2026-10-03 and amended the same day with A1–A6 from this spec (see [Requirements feedback](#requirements-feedback)). Read as amended, 2026-10-03.
@@ -57,7 +57,7 @@ Everything runs on the author's Mac at no cost. No server or database needs to b
 - **Cloudflare tightens its bot rules** (moderate likelihood, given the inconsistent 403 in E1). The first sign is an exit code of 2. Mitigation, not built: download PDFs by hand into `data/melrose/raw/` and run `rebuild`.
 - **The format drifts.** An unknown result or a broken line structure quarantines the week instead of loading bad data, so it shows up the first time it happens.
 - **The department adds or renames a call type** (for example, a pedestrian-crash type). It wouldn't appear on the map until added to `categories.toml`, but `collect` reports every call type it hasn't seen before, so it can't go unnoticed.
-- **The boundary rule misattributes stops.** 37% of placed entries touch a boundary (E6), so ward totals depend heavily on this rule. Phase 2's manual review is the check. [OPEN: are the rule 5 thresholds right? See Q2.]
+- **The boundary rule misattributes stops.** 37% of placed entries touch a boundary (E6), so ward totals depend heavily on this rule. Phase 2's manual review was the check: Ken accepted the boundary streets the thresholds give on 2026-10-07 (Q2 closed).
 - **The department edits or re-uploads a week.** This already happens (E7). Every version is kept, the latest covering log decides what is shown, and `collect` reports each difference so the author can see why a count moved.
 - **The reference data ages.** New addresses wouldn't be found and would show up as `unplaced`. Re-run `fetch-reference` and `rebuild`; the snapshot date is in every export.
 - **OSM tile policy at public scale.** Public hosting is a Later item. Swapping the tile URL in Leaflet is a one-line change.
@@ -304,7 +304,6 @@ A1–A6 were approved by the requirements owner and applied to design.md on 2026
 
 | # | Question | Owner | Blocks |
 |---|---|---|---|
-| Q2 | Are the rule 5 boundary thresholds right? | Ken, at the phase 2 gate | Phase 3 |
 | Q3 | What are the terms of use for the MassGIS and MassDOT data when republished? Not checked. | Ken | Later (public hosting) |
 | Q4 | Design Q1, older formats: logs from 2018 and 2021 parse with the same grammar (E7); nothing earlier was checked, and the 2014 logs are daily rather than weekly. | Technical spec, at backfill | Later (backfill) |
 
@@ -324,7 +323,7 @@ E1–E8 were run on 2026-10-03 in a scratch directory outside the repo; E9 is ph
 | E3 | Results vocabulary, 13 logs | A small closed set of results; 265 type/result pairs | Logs outside those 13 (E7 widens the sample) |
 | E4 | Offline placement, Jul 20–Sep 27 | 395 of 399 address or intersection stops and crashes placed (99.0%) | Whether placed points are correct; one of the 4 failures was not examined |
 | E5 | Intersection accuracy | Median 30 m from the cited address; 90th percentile 39 m | Address placements; ground truth beyond the log's own cited address |
-| E6 | Ward-boundary test | Of 388 placed entries: 244 in one ward, 135 in two, 9 in three | Whether the rule 5 thresholds are right (Q2); the two crash types added later |
+| E6 | Ward-boundary test | Of 388 placed entries: 244 in one ward, 135 in two, 9 in three | Whether the rule 5 thresholds are right, settled at the phase 2 gate (E10); the two crash types added later |
 | E7 | Wider sample, 94 logs | No pedestrian or bicycle call type; three crash call types; logs re-issued with different contents | Logs before 2018, including the daily 2014 format (Q4) |
 | E8 | Size and speed at backfill scale | 65k records: 21.4 MB raw, 3.25 MB gzipped; filtering and counting 20 ms | Leaflet rendering in a browser; the backfill gate covers it |
 | E9 | The line grammar over the 11 logs uploaded since Jul 20 | All 11 load, none quarantined; 1,958 entries for Jul 20–Sep 27 with a printed call number, plus 1 stored under its `Refer To` call number (A7); 2 entries with no call number, 7 trailing locations, 24 leftover lines, 23 results printed cut short; [AC1](design.md#ac1) (Sep 21–27 count and 10 entries' fields) passes against a golden file built from `pdftotext`, not from the parser | Logs before Jul 2026; a font size other than 12 or 14 pt; Ken's hand check of the golden file |
@@ -373,7 +372,7 @@ How the log PDF varies, with each variant drawn from the 94 parsed PDFs (E7): re
 2. **Street names.** Expand the suffix (ST→STREET, AVE→AVENUE and so on) and apply a small alias table (W→WEST, MT→MOUNT). Then match against the reference street list: the street names of the address points and the roads together, since some streets appear in only one. A name printed with no suffix (`W EMERSON`, `1 MAIN`) matches only when exactly one reference street is that name plus one suffix. An unknown street is listed in the run summary and never displayed.
 3. **Address.** Use the exact address point, keyed on the leading integer of its number; where two points share a key, the lowest `MASTER_ADDRESS_ID`. Otherwise use the nearest number on the same street within ±40 on the same side, ties to the lower number, recorded as `nearest number (N)`.
 4. **Intersection.** Use the point where the two streets' centrelines cross, choosing the crossing closest in total to the cited house numbers' points (rule 3), ties by position. With no cited number found, use the only crossing; with several, leave the entry `unplaced` rather than guess. With no crossing, use the midpoint of the two cited address points, if they are within 150 m of each other. The method records the crossing's distance from the nearer cited address.
-5. **Wards.** A point counts toward the ward it lies in, plus both wards of any shared ward edge within 40 m, if that entry's street runs along the edge. "Runs along" means at least 60% of the street's centreline within 60 m of the point lies within 20 m of the edge. **These thresholds are this spec's own settings, not measured; phase 2 tests them.** [OPEN: are they right? See Q2.]
+5. **Wards.** A point counts toward the ward it lies in, plus both wards of any shared ward edge within 40 m, if that entry's street runs along the edge. "Runs along" means at least 60% of the street's centreline within 60 m of the point lies within 20 m of the edge. These thresholds are this spec's own settings, not measured; Ken accepted the boundary streets they give at the phase 2 gate, 2026-10-07 (E10).
 6. **Ranking streets.** Use the entry's street names in the log's own abbreviated form (e.g. "Franklin St"), keyed on the normalised name.
 
 ## Appendix D: storage and export formats
