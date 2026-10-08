@@ -1,5 +1,5 @@
 {
-  "about": "AC1 golden entries for the Sep 21-27, 2026 log (media 442445): the 10 call numbers random.Random(20260921) samples from the log's sorted call numbers. Built by hand from `pdftotext -layout` output, not from this package's parser. Pages are 1-based PDF pages. Hand-checked against the PDF by: (pending, Ken Hoffmann)",
+  "about": "AC1 golden entries for the Sep 21-27, 2026 log (media 442445): the 10 call numbers random.Random(20260921) samples from the log's sorted call numbers. Built by hand from `pdftotext -layout` output, not from this package's parser. Pages are 1-based PDF pages. Hand-checked against the PDF by Ken Hoffmann, 2026-10-07.",
   "seed": 20260921,
   "entries": [
     {"call_number": "26-11171", "page": 5, "date": "2026-09-22", "time": "1801", "call_type": "MOTOR VEHICLE STOP", "result": "Unit Clear", "location_prefix": "Location/Address", "location_raw": "WEST EMERSON ST"},
