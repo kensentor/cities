@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Melrose traffic stops</title>
+  </head>
+  <body>
+    <header>
+      <h1>Melrose traffic stops and crashes</h1>
+      <p id="status">Loading…</p>
+    </header>
+    <main>
+      <aside>
+        <section class="filters" aria-label="Filters">
+          <label>From <input id="from" type="date" /></label>
+          <label>To <input id="to" type="date" /></label>
+          <fieldset id="categories"><legend>Show</legend></fieldset>
+          <label>Result <select id="result"></select></label>
+        </section>
+        <p id="summary"></p>
+        <table id="unmapped"></table>
+        <h2>Wards</h2>
+        <table id="wards"></table>
+        <p id="ward-note" class="note"></p>
+        <h2>Streets by stops</h2>
+        <div class="scroll"><table id="ranking"></table></div>
+        <p id="ranking-note" class="note"></p>
+        <p class="note">Source: the Melrose Police Department's published weekly dispatch logs. Each marker links to its log. Addresses only; place names are never shown.</p>
+      </aside>
+      <div id="map" role="region" aria-label="Map of Melrose"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

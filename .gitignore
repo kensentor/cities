@@ -5,3 +5,5 @@ __pycache__/
 *.tmp
 data/*/db.sqlite
 site/public/data/
+site/node_modules/
+site/dist/
