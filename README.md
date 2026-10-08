@@ -19,7 +19,7 @@ Run each command from the repo root. Data goes to `data/melrose/` unless `CITIES
 
 | Command | What it does |
 |---|---|
-| `uv run cities melrose collect [--since YYYY-MM-DD]` | Lists the logs uploaded since 2026-07-20, downloads any not seen before, keeps each PDF, loads its entries, and places them. Running it again with nothing new writes nothing. |
+| `uv run cities melrose collect [--since YYYY-MM-DD]` | Lists the logs uploaded since 2025-01-01, downloads any not seen before, keeps each PDF, loads its entries, and places them. Running it again with nothing new writes nothing. |
 | `uv run cities melrose rebuild` | Re-reads every archived PDF and derives everything again, placements included. Use it after a parser change, after `fetch-reference`, on a fresh clone, or after putting hand-downloaded PDFs in the archive. |
 | `uv run cities melrose sample [--n 20] [--seed S] [--type CALL TYPE …]` | Prints random placed entries with their published location, the address shown, the method and an OpenStreetMap link, to check by eye that each lies where its log says. The seed is printed, so a sample can be repeated. |
 | `uv run cities melrose export` | Writes the map page's data again from what is stored: after editing `categories.toml`, or once for a database built before phase 3, since a `collect` with nothing new writes nothing. `collect` (when it found something) and `rebuild` export too. It refuses, exiting 3, if the placements came from another reference snapshot: run `rebuild` after `fetch-reference`. |
@@ -123,7 +123,7 @@ These tests guard rules that would otherwise fail without any error:
 | The current version is the latest upload covering the entry's date; an entry missing from it is withdrawn | `test_rules.py::test_current_version_is_the_latest_upload_covering_the_entry_date`, `::test_an_entry_missing_from_the_latest_covering_log_is_withdrawn` |
 | A withheld entry's location never becomes another entry's location | `test_rules.py::test_trailing_location_never_becomes_the_entry_location`, `test_published_logs.py::test_a_withheld_entrys_location_left_after_an_arrest_is_not_this_entrys` |
 | A line that would have fitted on the line before is not joined to it | `test_log_grammar.py::test_a_word_that_would_have_fitted_is_not_a_wrap`, `test_published_logs.py::test_text_after_page_furniture_that_would_have_fitted_is_not_a_location` |
-| Every call number printed in a log becomes exactly one stored entry | `test_published_logs.py::test_every_log_since_jul_20_passes_the_completeness_check` |
+| Every call number printed in a log becomes exactly one stored entry | `test_published_logs.py::test_every_archived_log_passes_the_completeness_check` |
 | Collecting again changes nothing, and `rebuild` equals incremental collection, placements included | `test_use_cases.py::test_collecting_again_writes_nothing`, `::test_rebuild_from_the_archive_equals_incremental_collection` |
 | A failed download writes nothing | `test_use_cases.py::test_a_failed_download_writes_nothing` |
 | Every adapter inherits its port, and every port method is abstract | `test_ports.py` |
