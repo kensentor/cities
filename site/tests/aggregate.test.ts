@@ -319,6 +319,8 @@ describe("a drawn area", () => {
     const records = [rec({}), rec({ kind: "unplaced" })];
     expect(filterRecords(records, { ...open, area: null })).toEqual(records);
     expect(filterRecords(records, open)).toEqual(records);
+  });
+});
 
 describe("restoreDates", () => {
   const range = { from: "2025-01-01", to: "2026-10-04" };
