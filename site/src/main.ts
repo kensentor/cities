@@ -7,6 +7,7 @@ import "./style.css";
 import {
   type Filters,
   type MarkerGroup,
+  type SavedDates,
   STOPS,
   categoryCounts,
   UNMAPPED,
@@ -16,6 +17,7 @@ import {
   filterRecords,
   formatPerCrash,
   markerGroups,
+  restoreDates,
   stopResultCounts,
   stopResultOptions,
   streetRanking,
@@ -28,6 +30,25 @@ import { type MapExport, parseExport } from "./types";
 // colour whatever is filtered.
 const SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"];
 const DATA = `${import.meta.env.BASE_URL}data/melrose/`;
+
+const DATES_KEY = "melrose-map:dates";
+
+// Storage can be missing or throw (private windows, blocked site data); the page works without it.
+function loadDates(): unknown {
+  try {
+    return JSON.parse(localStorage.getItem(DATES_KEY) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveDates(dates: SavedDates): void {
+  try {
+    localStorage.setItem(DATES_KEY, JSON.stringify(dates));
+  } catch {
+    // Nothing to do: the dates just are not remembered.
+  }
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, className?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -92,18 +113,26 @@ async function main(): Promise<void> {
     input.min = range.from;
     input.max = range.to;
   }
-  from.value = range.from;
-  to.value = range.to;
+  const start = restoreDates(loadDates(), range);
+  from.value = start.from;
+  to.value = start.to;
 
   // While To is earlier than From, the map and tables keep the last valid range, and the message
   // says which range that is (design AC4a).
-  let shownRange = { from: range.from, to: range.to };
+  let shownRange = start;
   let rangeError: string | null = null;
   const dateMessage = byId("date-error");
   function onDateChange(edited: "from" | "to"): void {
     const next = { from: from.value || range.from, to: to.value || range.to };
     rangeError = dateError(next.from, next.to, edited);
-    if (rangeError === null) shownRange = next;
+    if (rangeError === null) {
+      shownRange = next;
+      // An end left at the collected period's edge is saved as null, so new logs still show next time.
+      saveDates({
+        from: next.from === range.from ? null : next.from,
+        to: next.to === range.to ? null : next.to,
+      });
+    }
     for (const input of [from, to]) {
       if (rangeError === null) input.removeAttribute("aria-invalid");
       else input.setAttribute("aria-invalid", "true");
