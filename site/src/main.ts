@@ -19,6 +19,7 @@ import {
   entryDetails,
   filterRecords,
   formatPerCrash,
+  defaultDates,
   markerGroups,
   restoreDates,
   stopResultCounts,
@@ -162,7 +163,10 @@ async function main(): Promise<void> {
     input.min = range.from;
     input.max = range.to;
   }
-  const start = restoreDates(loadDates(), range);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const initial = defaultDates(range, today);
+  const start = restoreDates(loadDates(), range, today);
   from.value = start.from;
   to.value = start.to;
 
@@ -176,10 +180,10 @@ async function main(): Promise<void> {
     rangeError = dateError(next.from, next.to, edited);
     if (rangeError === null) {
       shownRange = next;
-      // An end left at the collected period's edge is saved as null, so new logs still show next time.
+      // An end left at its default is saved as null, so it keeps following the year and the newest logs.
       saveDates({
-        from: next.from === range.from ? null : next.from,
-        to: next.to === range.to ? null : next.to,
+        from: next.from === initial.from ? null : next.from,
+        to: next.to === initial.to ? null : next.to,
       });
     }
     for (const input of [from, to]) {
