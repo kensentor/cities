@@ -21,6 +21,21 @@ export interface Filters {
   to: string; // ISO date, inclusive
   categories: ReadonlySet<string>;
   stopResults: ReadonlySet<string>; // the stop results ticked under Stops; crashes are never filtered by result
+  area?: LatLon[] | null; // a drawn polygon; when set, only entries placed inside it match
+}
+
+/** A polygon vertex or a point, as [latitude, longitude]. */
+export type LatLon = readonly [number, number];
+
+/** Ray casting; a point exactly on an edge may fall either side, which is immaterial at a marker's precision. */
+export function pointInPolygon(lat: number, lon: number, ring: readonly LatLon[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [latI, lonI] = ring[i] as LatLon;
+    const [latJ, lonJ] = ring[j] as LatLon;
+    if (lonI > lon !== lonJ > lon && lat < ((latJ - latI) * (lon - lonI)) / (lonJ - lonI) + latI) inside = !inside;
+  }
+  return inside;
 }
 
 export function isMapped(r: ExportRecord): boolean {
@@ -31,13 +46,23 @@ function inDates(r: ExportRecord, f: Filters): boolean {
   return r.date >= f.from && r.date <= f.to;
 }
 
+/** An entry with no coordinates is never inside a drawn area. */
+function inArea(r: ExportRecord, f: Filters): boolean {
+  if (!f.area) return true;
+  return r.lat !== null && r.lon !== null && pointInPolygon(r.lat, r.lon, f.area);
+}
+
+function inScope(r: ExportRecord, f: Filters): boolean {
+  return inDates(r, f) && inArea(r, f);
+}
+
 function hasResult(r: ExportRecord, f: Filters): boolean {
   return r.category !== STOPS || f.stopResults.has(r.result);
 }
 
 /** Records matching every filter: what the markers and the unmapped counts show. */
 export function filterRecords(records: readonly ExportRecord[], f: Filters): ExportRecord[] {
-  return records.filter((r) => inDates(r, f) && f.categories.has(r.category) && hasResult(r, f));
+  return records.filter((r) => inScope(r, f) && f.categories.has(r.category) && hasResult(r, f));
 }
 
 /** The whole collected period: from the first log's first date to the last log's last date. */
@@ -58,7 +83,7 @@ export function stopResultOptions(records: readonly ExportRecord[]): string[] {
  * it, so a count reads the same ticked or not (A15).
  */
 export function categoryCounts(records: readonly ExportRecord[], f: Filters): Map<string, number> {
-  return countBy(records.filter((r) => inDates(r, f)), (r) => [r.category]);
+  return countBy(records.filter((r) => inScope(r, f)), (r) => [r.category]);
 }
 
 /**
@@ -66,7 +91,7 @@ export function categoryCounts(records: readonly ExportRecord[], f: Filters): Ma
  * the Stops box, do not change it, so a count reads the same ticked or not (A15).
  */
 export function stopResultCounts(records: readonly ExportRecord[], f: Filters): Map<string, number> {
-  return countBy(records.filter((r) => r.category === STOPS && inDates(r, f)), (r) => [r.result]);
+  return countBy(records.filter((r) => r.category === STOPS && inScope(r, f)), (r) => [r.result]);
 }
 
 export interface Tally {
@@ -133,7 +158,7 @@ export interface WardTable {
  */
 export function wardTable(records: readonly ExportRecord[], f: Filters): WardTable {
   const stops = rankedStops(records, f);
-  const crashes = records.filter((r) => r.category === CRASHES && f.categories.has(CRASHES) && inDates(r, f));
+  const crashes = records.filter((r) => r.category === CRASHES && f.categories.has(CRASHES) && inScope(r, f));
   const stopsByWard = countBy(stops, (r) => r.wards);
   const crashesByWard = countBy(crashes, (r) => r.wards);
   const rows = WARDS.map((ward) => {
@@ -180,7 +205,7 @@ export function streetRanking(records: readonly ExportRecord[], f: Filters): Str
 }
 
 function rankedStops(records: readonly ExportRecord[], f: Filters): ExportRecord[] {
-  return records.filter((r) => r.category === STOPS && f.categories.has(STOPS) && inDates(r, f) && hasResult(r, f));
+  return records.filter((r) => r.category === STOPS && f.categories.has(STOPS) && inScope(r, f) && hasResult(r, f));
 }
 
 export interface SavedDates {

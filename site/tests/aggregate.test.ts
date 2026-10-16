@@ -11,6 +11,8 @@ import {
   filterRecords,
   formatPerCrash,
   markerGroups,
+  pointInPolygon,
+
   restoreDates,
   stopResultCounts,
   stopResultOptions,
@@ -271,6 +273,52 @@ describe("AC12: the stop results ticked under Stops", () => {
 
   it("are offered from stops only, most frequent first", () => {
     expect(stopResultOptions(RECORDS)).toEqual(["Verbal Warning", "Citation/Warning Issued", "Arrest"]);
+  });
+});
+
+describe("a drawn area", () => {
+  // A square from 42.45–42.47 N and 71.07–71.05 W, with a notch cut from the north-east corner.
+  const square = [
+    [42.45, -71.07],
+    [42.47, -71.07],
+    [42.47, -71.06],
+    [42.46, -71.06],
+    [42.46, -71.05],
+    [42.45, -71.05],
+  ] as const;
+  const open: Filters = {
+    from: "2026-01-01",
+    to: "2026-12-31",
+    categories: new Set([STOPS, CRASHES]),
+    stopResults: new Set(["Verbal Warning"]),
+  };
+
+  it("holds points inside, including a concave polygon's inner side, and rejects those outside", () => {
+    expect(pointInPolygon(42.455, -71.06, square)).toBe(true);
+    expect(pointInPolygon(42.465, -71.065, square)).toBe(true);
+    expect(pointInPolygon(42.465, -71.055, square)).toBe(false); // in the notch
+    expect(pointInPolygon(42.5, -71.06, square)).toBe(false);
+  });
+
+  it("keeps only placed entries inside it, across every count", () => {
+    const inside = rec({ lat: 42.455, lon: -71.06 });
+    const outside = rec({ lat: 42.5, lon: -71.06 });
+    const unplaced = rec({ kind: "unplaced" });
+    const insideCrash = crash({ lat: 42.455, lon: -71.065 });
+    const records = [inside, outside, unplaced, insideCrash];
+    const f = { ...open, area: square.map((p) => [...p] as [number, number]) };
+
+    expect(filterRecords(records, f)).toEqual([inside, insideCrash]);
+    expect(categoryCounts(records, f).get(STOPS)).toBe(1);
+    expect(stopResultCounts(records, f).get("Verbal Warning")).toBe(1);
+    expect(wardTable(records, f).totalStops).toBe(1);
+    expect(streetRanking(records, f).rows).toEqual([{ street: "Main St", stops: 1 }]);
+  });
+
+  it("changes nothing when there is no area", () => {
+    const records = [rec({}), rec({ kind: "unplaced" })];
+    expect(filterRecords(records, { ...open, area: null })).toEqual(records);
+    expect(filterRecords(records, open)).toEqual(records);
   });
 });
 

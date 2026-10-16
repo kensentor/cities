@@ -3,9 +3,12 @@
 
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "@geoman-io/leaflet-geoman-free";
+import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import "./style.css";
 import {
   type Filters,
+  type LatLon,
   type MarkerGroup,
   type SavedDates,
   STOPS,
@@ -96,6 +99,7 @@ async function main(): Promise<void> {
   const outlines = L.geoJSON(wards, {
     style: { color: "#3d3d3a", weight: 2, opacity: 0.8, fillColor: "#3d3d3a", fillOpacity: 0.03 },
     interactive: false,
+    pmIgnore: true, // Geoman's edit and remove modes must touch only the drawn area
   }).addTo(map);
   for (const feature of wards.features) {
     const props = feature.properties as { ward: string; label: [number, number] };
@@ -106,6 +110,51 @@ async function main(): Promise<void> {
   }
   map.fitBounds(outlines.getBounds());
   const markers = L.layerGroup().addTo(map);
+
+  // One drawn polygon at a time. While it exists, every count, table and marker covers only entries
+  // placed inside it; drawing again replaces it and Clear area removes it.
+  let area: LatLon[] | null = null;
+  let areaLayer: L.Polygon | null = null;
+  const areaNote = byId("area");
+  map.pm.addControls({
+    position: "topleft",
+    drawPolygon: true,
+    editMode: true,
+    removalMode: true,
+    drawMarker: false,
+    drawCircleMarker: false,
+    drawPolyline: false,
+    drawRectangle: false,
+    drawCircle: false,
+    drawText: false,
+    dragMode: false,
+    cutPolygon: false,
+    rotateMode: false,
+  });
+  map.pm.setPathOptions({ color: "#111111", weight: 2, fillColor: "#111111", fillOpacity: 0.06 });
+  function setArea(layer: L.Polygon | null): void {
+    area = layer === null ? null : (layer.getLatLngs()[0] as L.LatLng[]).map((p): LatLon => [p.lat, p.lng]);
+    areaNote.hidden = layer === null;
+    render();
+  }
+  function clearArea(): void {
+    areaLayer?.remove();
+    areaLayer = null;
+    setArea(null);
+  }
+  map.on("pm:create", (e) => {
+    if (e.shape !== "Polygon") return;
+    const layer = e.layer as L.Polygon;
+    if (areaLayer !== null && areaLayer !== layer) areaLayer.remove();
+    areaLayer = layer;
+    layer.on("pm:edit", () => setArea(layer));
+    layer.on("pm:remove", () => {
+      areaLayer = null;
+      setArea(null);
+    });
+    setArea(layer);
+  });
+  byId("area-clear").addEventListener("click", clearArea);
 
   const from = byId<HTMLInputElement>("from");
   const to = byId<HTMLInputElement>("to");
@@ -194,7 +243,7 @@ async function main(): Promise<void> {
   }
 
   function filters(): Filters {
-    return { from: shownRange.from, to: shownRange.to, categories: checked, stopResults };
+    return { from: shownRange.from, to: shownRange.to, categories: checked, stopResults, area };
   }
 
   function popup(group: MarkerGroup): HTMLElement {
@@ -234,6 +283,7 @@ async function main(): Promise<void> {
         weight: 1.5,
         fillColor: colour.get(group.category) ?? "#666",
         fillOpacity: 0.85,
+        pmIgnore: true,
       })
         .bindTooltip(`${n} × ${label.get(group.category) ?? ""} · ${first?.address ?? ""}`)
         .bindPopup(() => popup(group), { maxWidth: 320 })
