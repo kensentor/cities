@@ -208,6 +208,23 @@ function rankedStops(records: readonly ExportRecord[], f: Filters): ExportRecord
   return records.filter((r) => r.category === STOPS && f.categories.has(STOPS) && inScope(r, f) && hasResult(r, f));
 }
 
+export interface SavedDates {
+  from: string | null; // null: the first day collected, so a later export's earlier logs are not hidden
+  to: string | null; // null: the last day collected, so a later export's newer logs are not hidden
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The range to show for dates saved on an earlier visit: each end only if it lies inside the collected period, and the pair only if it is not inverted. */
+export function restoreDates(saved: unknown, range: { from: string; to: string }): { from: string; to: string } {
+  const end = (value: unknown, fallback: string): string =>
+    typeof value === "string" && ISO_DATE.test(value) && value >= range.from && value <= range.to ? value : fallback;
+  const s = (saved ?? {}) as Partial<Record<"from" | "to", unknown>>;
+  const from = end(s.from, range.from);
+  const to = end(s.to, range.to);
+  return from <= to ? { from, to } : { from: range.from, to: range.to };
+}
+
 /**
  * The message for a date range whose To is earlier than its From (design AC4a), worded after the
  * input just edited, or null when the range is valid. Both ends are inclusive, so From = To is one day.
