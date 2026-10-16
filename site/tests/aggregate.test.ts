@@ -11,6 +11,7 @@ import {
   filterRecords,
   formatPerCrash,
   markerGroups,
+  restoreDates,
   stopResultCounts,
   stopResultOptions,
   streetRanking,
@@ -270,5 +271,24 @@ describe("AC12: the stop results ticked under Stops", () => {
 
   it("are offered from stops only, most frequent first", () => {
     expect(stopResultOptions(RECORDS)).toEqual(["Verbal Warning", "Citation/Warning Issued", "Arrest"]);
+  });
+});
+
+describe("restoreDates", () => {
+  const range = { from: "2025-01-01", to: "2026-10-04" };
+
+  it("returns the saved ends when they lie inside the collected period", () => {
+    expect(restoreDates({ from: "2026-03-01", to: "2026-04-01" }, range)).toEqual({ from: "2026-03-01", to: "2026-04-01" });
+  });
+
+  it("uses the collected period for a null end, nothing saved, or anything that is not a date", () => {
+    expect(restoreDates({ from: null, to: "2026-04-01" }, range)).toEqual({ from: range.from, to: "2026-04-01" });
+    expect(restoreDates(null, range)).toEqual(range);
+    expect(restoreDates({ from: "yesterday", to: 5 }, range)).toEqual(range);
+  });
+
+  it("drops an end outside the collected period, and an inverted pair", () => {
+    expect(restoreDates({ from: "2024-01-01", to: "2027-01-01" }, range)).toEqual(range);
+    expect(restoreDates({ from: "2026-05-01", to: "2026-02-01" }, range)).toEqual(range);
   });
 });
