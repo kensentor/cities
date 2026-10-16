@@ -19,7 +19,7 @@ Run each command from the repo root. Data goes to `data/melrose/` unless `CITIES
 
 | Command | What it does |
 |---|---|
-| `uv run cities melrose collect [--since YYYY-MM-DD]` | Lists the logs uploaded since 2025-01-01, downloads any not seen before, keeps each PDF, loads its entries, and places them. Running it again with nothing new writes nothing. |
+| `uv run cities melrose collect [--since YYYY-MM-DD]` | Lists the logs uploaded since 2024-01-01, downloads any not seen before, keeps each PDF, loads its entries, and places them. Running it again with nothing new writes nothing. |
 | `uv run cities melrose rebuild` | Re-reads every archived PDF and derives everything again, placements included. Use it after a parser change, after `fetch-reference`, on a fresh clone, or after putting hand-downloaded PDFs in the archive. |
 | `uv run cities melrose sample [--n 20] [--seed S] [--type CALL TYPE …]` | Prints random placed entries with their published location, the address shown, the method and an OpenStreetMap link, to check by eye that each lies where its log says. The seed is printed, so a sample can be repeated. |
 | `uv run cities melrose export` | Writes the map page's data again from what is stored: after editing `categories.toml`, or once for a database built before phase 3, since a `collect` with nothing new writes nothing. `collect` (when it found something) and `rebuild` export too. It refuses, exiting 3, if the placements came from another reference snapshot: run `rebuild` after `fetch-reference`. |

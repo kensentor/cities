@@ -106,7 +106,7 @@ def test_ac5_every_current_entry_of_a_listed_call_type_is_exported_and_nothing_e
     listed = {t for c in categories() for t in c.call_types}
     expected = sorted(v.call_number for v in built.current if v.call_type in listed)
     assert sorted(r["call"] for r in built.export["records"]) == expected
-    assert len(expected) == 5064
+    assert len(expected) == 7073
 
 
 def test_a_record_is_on_the_map_exactly_when_it_has_an_address_a_point_and_one_to_three_wards(built: Built) -> None:

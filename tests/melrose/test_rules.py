@@ -28,6 +28,7 @@ DAY = date(2026, 9, 21)
         ("MOTOR VEHICLE STOP * Arrest 17 and Over Male", "MOTOR VEHICLE STOP", "* Arrest 17 and Over Male", False),
         ("DISTURBANCE * Arrest Under 17 Male", "DISTURBANCE", "* Arrest Under 17 Male", False),
         ("Restraining Order Violation * Arrest 17", "Restraining Order Violation", "* Arrest 17", False),
+        ("SUSPICIOUS ACTIVITY * Prot. Cust. 18 & Over Male", "SUSPICIOUS ACTIVITY", "* Prot. Cust. 18 & Over Male", False),
     ],
 )
 def test_split_header_by_known_results(header: str, call_type: str, result: str, truncated: bool) -> None:
