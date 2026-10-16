@@ -1,6 +1,6 @@
 # Melrose traffic stops map — design spec
 
-- **Status:** Approved by Ken Hoffmann, 2026-10-03. Amended with A1–A6 from the technical spec, approved by Ken Hoffmann, 2026-10-03, with A7–A9, approved by Ken Hoffmann, 2026-10-07, with A10–A11, approved by Ken Hoffmann, 2026-10-08, and with A12–A17, asked for and approved by Ken Hoffmann, 2026-10-08.
+- **Status:** Approved by Ken Hoffmann, 2026-10-03. Amended with A1–A6 from the technical spec, approved by Ken Hoffmann, 2026-10-03, with A7–A9, approved by Ken Hoffmann, 2026-10-07, with A10–A11, approved by Ken Hoffmann, 2026-10-08, and with A12–A17, asked for and approved by Ken Hoffmann, 2026-10-08, and with A18, asked for by Ken Hoffmann, 2026-10-16.
 - **Date:** 2026-10-03
 - **Author:** Ken Hoffmann
 - **Ticket:** none
@@ -29,7 +29,7 @@ The first user and maintainer is the author, running it on their own machine. A 
 
 ### In the first version
 
-- Every dispatch-log entry from Jan 1, 2025 onward (the first log covers the week of Dec 30, 2024) is collected and stored, whatever its call type (A16).
+- Every dispatch-log entry from Jan 1, 2024 onward (the first log covers the week of Jan 1, 2024) is collected and stored, whatever its call type (A16, A18).
 - A map of Melrose with the 7 ward boundaries. It shows markers for stops and crashes, filtered by date range, category, and the result of a stop. Crashes are MOTOR VEHICLE ACCIDENT, ACCIDENT HIT & RUN and MVA - Not Investigated (D2).
 - A ranking of streets by number of stops, and a per-ward table of stops, crashes and stops per crash. Both follow the current filters.
 - New weekly logs are collected by running a command by hand (D9).
@@ -66,7 +66,7 @@ Nothing has been built yet. What was checked on 2026-10-03:
 
 | ID | Priority | Goal | Requirement |
 |---|---|---|---|
-| <a name="r1"></a>R1 | Must | G1–G4 | Collect every entry in every weekly dispatch log covering Jan 1, 2025 onward, of every call type (A16). An entry printed with a call type and no result is stored with an empty result; the entries of a day whose date heading the log lost take that day's date from its overnight reset in call times (A17). An entry printed without its call number is stored under the call its own Refer To line names; one with no such line is reported instead, since it has no key (A7). |
+| <a name="r1"></a>R1 | Must | G1–G4 | Collect every entry in every weekly dispatch log covering Jan 1, 2024 onward, of every call type (A16, A18). An entry printed with a call type and no result is stored with an empty result; the entries of a day whose date heading the log lost take that day's date from its overnight reset in call times (A17). An entry printed without its call number is stored under the call its own Refer To line names; one with no such line is reported instead, since it has no key (A7). |
 | <a name="r2"></a>R2 | Must | G4 | Store each entry with its call number, date, time, call type, result, and location text exactly as published, plus which weekly log it came from. |
 | <a name="r3"></a>R3 | Must | G1, G3 | Place each entry whose location is an address or intersection at a point in Melrose. An entry whose location can't be placed, or that would land outside Melrose, is counted as unmapped rather than shown in the wrong place. An entry's location is its first location line, and only if it comes before the entry's ID, Refer To or Charges lines; any other location line is usually left by an entry the department withheld, and is kept in storage but never used (A8). |
 | <a name="r4"></a>R4 | Must | G1, G2 | Show a map of Melrose with markers for stops (MOTOR VEHICLE STOP) and crashes (MOTOR VEHICLE ACCIDENT, ACCIDENT HIT & RUN, MVA - Not Investigated), filtered by a date range and by category. If To is earlier than From, the page says so and keeps showing the last valid range (A12). Beside each category is its number of entries in the date range, the same whether it is ticked or not (A15). |
@@ -117,7 +117,7 @@ Nothing has been built yet. What was checked on 2026-10-03:
 
 ## Assumptions
 
-- The log format has stayed the same since Jan 2025, apart from the variations the parser handles (A16), and the call-type labels are used consistently. A 2018 log carries `Narrative:` lines not seen since, so earlier years need checking before a backfill.
+- The log format has stayed the same since Jan 2024, apart from the variations the parser handles (A16), and the call-type labels are used consistently. A 2018 log carries `Narrative:` lines not seen since, so earlier years need checking before a backfill.
 - The three crash call types are a reasonable stand-in for crashes until MassDOT data is added. The blotter has no pedestrian or bicycle call type, so it can't separate those crashes.
 - The 2022 ward boundaries are still current.
 
@@ -127,7 +127,7 @@ Nothing has been built yet. What was checked on 2026-10-03:
 - **D2** — Use the blotter's crash entries as crashes in v1: MOTOR VEHICLE ACCIDENT, ACCIDENT HIT & RUN and MVA - Not Investigated, grouped as one category, with each marker still showing its exact call type. *(Amended, A5: the original counted MOTOR VEHICLE ACCIDENT only, which leaves out about 13% of crashes.)* Rejected: waiting for MassDOT data, which would hold v1 up (MassDOT comes under Later); leaving out MVA - Not Investigated, because an uninvestigated crash is still a crash.
 - **D3** — Measure "policed equally" by raw stops per ward, alongside stops per crash. Rejected for v1: per resident and per mile of road, because both need outside data.
 - **D4** — Count stops without a usable location and show that count, rather than placing them approximately. Rejected: putting street-only stops at the middle of the street, which suggests a precision the log doesn't have; and dropping them quietly, which would undercount wards without anyone noticing.
-- **D5** — Start from the week of Jul 20, 2026. *(Amended, A16: from Jan 1, 2025.)* Rejected: loading the full archive to 2014 in v1, because the format may have changed over 12 years and would hold up the first version.
+- **D5** — Start from the week of Jul 20, 2026. *(Amended, A16: from Jan 1, 2025; A18: from Jan 1, 2024.)* Rejected: loading the full archive to 2014 in v1, because the format may have changed over 12 years and would hold up the first version.
 - **D6** — Display addresses only, never place names. Rejected: showing locations as published, which would put household names on a public map.
 - **D7** — A stop on a ward-boundary street counts toward every ward the boundary separates (two, or three where boundaries meet), and the UI says how many stops were counted more than once and how many extra counts that adds. *(Amended, A3: three-ward cases were found at 9 of 388 placed entries.)* Rejected: assigning it to whichever ward the point falls in, since that depends on map precision rather than anything in the log, and the main enforcement streets may well be the boundaries.
 - **D8** — An intersection stop counts toward both streets in the ranking, and the UI says how many were counted twice. Rejected: the first street listed, because nothing shows it is the street where the stop happened; and the busier street, which needs traffic-volume data that v1 doesn't have.

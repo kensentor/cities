@@ -12,6 +12,7 @@ import re
 
 KNOWN_RESULTS: frozenset[str] = frozenset(
     {
+        "* Prot. Cust. 18 & Over Male",
         "* Report taken",
         "Alarm-Medical Device",
         "Building Checked - Secure",

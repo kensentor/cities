@@ -23,6 +23,7 @@ from cities.melrose.ports.inbound import ExportRefused
 from cities.melrose.ports.outbound import Clock, EntryRepository, Gazetteer, MapPublisher
 
 ARREST = "Arrest"
+PROTECTIVE_CUSTODY = "Protective Custody"
 PLACED = (PlacementKind.ADDRESS, PlacementKind.INTERSECTION)
 
 # A result printed cut short is shown as its full form when exactly one known result completes it
@@ -37,9 +38,11 @@ _COMPLETIONS: dict[str, str] = {
 
 
 def public_result(result: str) -> str:
-    """Any arrest result is "Arrest", because sex and age band could identify a person (A2)."""
+    """Any arrest result is "Arrest" and any protective custody result "Protective Custody", because sex and age band could identify a person (A2)."""
     if ARREST_RESULT.fullmatch(result):
         return ARREST
+    if result.startswith("* Prot. Cust."):
+        return PROTECTIVE_CUSTODY
     return _COMPLETIONS.get(result, result)
 
 

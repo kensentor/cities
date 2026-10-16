@@ -6,6 +6,7 @@ import {
   type Filters,
   categoryCounts,
   dateError,
+  defaultDates,
   dateRange,
   entryDetails,
   filterRecords,
@@ -322,21 +323,35 @@ describe("a drawn area", () => {
   });
 });
 
-describe("restoreDates", () => {
-  const range = { from: "2025-01-01", to: "2026-10-04" };
+describe("the date range on load", () => {
+  const range = { from: "2024-01-01", to: "2026-10-04" };
+  const today = "2026-10-16";
 
-  it("returns the saved ends when they lie inside the collected period", () => {
-    expect(restoreDates({ from: "2026-03-01", to: "2026-04-01" }, range)).toEqual({ from: "2026-03-01", to: "2026-04-01" });
+  it("defaults to January 1 of this year through the newest log, never past it", () => {
+    expect(defaultDates(range, today)).toEqual({ from: "2026-01-01", to: "2026-10-04" });
+    expect(defaultDates(range, "2026-10-02")).toEqual({ from: "2026-01-01", to: "2026-10-02" });
   });
 
-  it("uses the collected period for a null end, nothing saved, or anything that is not a date", () => {
-    expect(restoreDates({ from: null, to: "2026-04-01" }, range)).toEqual({ from: range.from, to: "2026-04-01" });
-    expect(restoreDates(null, range)).toEqual(range);
-    expect(restoreDates({ from: "yesterday", to: 5 }, range)).toEqual(range);
+  it("starts at the first collected day when this year began before the data did", () => {
+    expect(defaultDates({ from: "2026-03-09", to: "2026-10-04" }, today).from).toBe("2026-03-09");
+  });
+
+  it("shows everything collected when this year has no logs yet", () => {
+    expect(defaultDates(range, "2027-01-03")).toEqual(range);
+  });
+
+  it("returns the saved ends when they lie inside the collected period", () => {
+    expect(restoreDates({ from: "2025-03-01", to: "2025-04-01" }, range, today)).toEqual({ from: "2025-03-01", to: "2025-04-01" });
+  });
+
+  it("uses the default for a null end, nothing saved, or anything that is not a date", () => {
+    expect(restoreDates({ from: null, to: "2026-04-01" }, range, today)).toEqual({ from: "2026-01-01", to: "2026-04-01" });
+    expect(restoreDates(null, range, today)).toEqual(defaultDates(range, today));
+    expect(restoreDates({ from: "yesterday", to: 5 }, range, today)).toEqual(defaultDates(range, today));
   });
 
   it("drops an end outside the collected period, and an inverted pair", () => {
-    expect(restoreDates({ from: "2024-01-01", to: "2027-01-01" }, range)).toEqual(range);
-    expect(restoreDates({ from: "2026-05-01", to: "2026-02-01" }, range)).toEqual(range);
+    expect(restoreDates({ from: "2023-01-01", to: "2027-01-01" }, range, today)).toEqual(defaultDates(range, today));
+    expect(restoreDates({ from: "2026-05-01", to: "2026-02-01" }, range, today)).toEqual(defaultDates(range, today));
   });
 });

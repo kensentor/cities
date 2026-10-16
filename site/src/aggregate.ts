@@ -209,20 +209,37 @@ function rankedStops(records: readonly ExportRecord[], f: Filters): ExportRecord
 }
 
 export interface SavedDates {
-  from: string | null; // null: the first day collected, so a later export's earlier logs are not hidden
-  to: string | null; // null: the last day collected, so a later export's newer logs are not hidden
+  from: string | null; // null: the default start, so it keeps following the current year
+  to: string | null; // null: the default end, so a later export's newer logs are not hidden
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The range to show for dates saved on an earlier visit: each end only if it lies inside the collected period, and the pair only if it is not inverted. */
-export function restoreDates(saved: unknown, range: { from: string; to: string }): { from: string; to: string } {
-  const end = (value: unknown, fallback: string): string =>
-    typeof value === "string" && ISO_DATE.test(value) && value >= range.from && value <= range.to ? value : fallback;
+/**
+ * The range shown with nothing saved: January 1 of the current year (today's year, as a local ISO
+ * date) to today, held inside the collected period. Before the year's first log arrives, when that
+ * would be empty, it is the whole collected period.
+ */
+export function defaultDates(range: { from: string; to: string }, today: string): { from: string; to: string } {
+  const from = `${today.slice(0, 4)}-01-01`;
+  const start = from < range.from ? range.from : from;
+  const end = today > range.to ? range.to : today;
+  return start <= end ? { from: start, to: end } : { from: range.from, to: range.to };
+}
+
+/** The range to show for dates saved on an earlier visit: each end only if it lies inside the collected period, else its default, and the pair only if it is not inverted. */
+export function restoreDates(
+  saved: unknown,
+  range: { from: string; to: string },
+  today: string,
+): { from: string; to: string } {
+  const fallback = defaultDates(range, today);
+  const end = (value: unknown, otherwise: string): string =>
+    typeof value === "string" && ISO_DATE.test(value) && value >= range.from && value <= range.to ? value : otherwise;
   const s = (saved ?? {}) as Partial<Record<"from" | "to", unknown>>;
-  const from = end(s.from, range.from);
-  const to = end(s.to, range.to);
-  return from <= to ? { from, to } : { from: range.from, to: range.to };
+  const from = end(s.from, fallback.from);
+  const to = end(s.to, fallback.to);
+  return from <= to ? { from, to } : fallback;
 }
 
 /**

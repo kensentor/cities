@@ -53,6 +53,7 @@ def export(versions: list[EntryVersion], placements: list[Placement], states: li
         ("* Arrest Under 17 Male", "Arrest"),
         ("* Arrest 17", "Arrest"),
         ("* Arrest", "Arrest"),
+        ("* Prot. Cust. 18 & Over Male", "Protective Custody"),
         ("Citation/Warning", "Citation/Warning Issued"),
         ("* Report", "* Report taken"),
         ("Taken/Referred to Other", "Taken/Referred to Other Agency"),
